@@ -42,29 +42,15 @@ add_library(
     llamafu.cpp
 )
 
-# For Android, we need to link android and log libraries
-# For Linux host, we skip these
-if (ANDROID)
-    target_link_libraries(
-        llamafu
-        libllama
-        libggml
-        libggml_cpu
-        libggml_base
-        libmtmd
-        android
-        log
-    )
-else()
-    target_link_libraries(
-        llamafu
-        libllama
-        libggml
-        libggml_cpu
-        libggml_base
-        libmtmd
-    )
-endif()
+# For iOS, we need to link the libraries
+target_link_libraries(
+    llamafu
+    libllama
+    libggml
+    libggml_cpu
+    libggml_base
+    libmtmd
+)
 
 # Create a test program
 add_executable(

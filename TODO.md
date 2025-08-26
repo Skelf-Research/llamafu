@@ -14,8 +14,9 @@
 - [x] Implement llamafu_complete function
 - [x] Implement llamafu_complete_stream function
 - [x] Implement llamafu_free function
-- [ ] Add LoRA support
-- [ ] Add constrained generation support
+- [x] Add multi-modal support
+- [x] Add LoRA support
+- [x] Add constrained generation support
 - [ ] Add tool calling support
 - [ ] Add instruct mode support
 
@@ -25,9 +26,10 @@
 - [x] Implement LlamafuBindings class
 - [x] Create llamafu_base.dart
 - [x] Implement Llamafu class with init and complete methods
+- [x] Add multi-modal support
+- [x] Add LoRA support
+- [x] Add constrained generation support
 - [ ] Add streaming completion support
-- [ ] Add LoRA support
-- [ ] Add constrained generation support
 - [ ] Add tool calling support
 - [ ] Add instruct mode support
 
@@ -69,6 +71,9 @@
 - [x] Document build process for Android
 - [x] Document build process for iOS
 - [x] Create project summary
+- [x] Document multi-modal implementation
+- [x] Document LoRA implementation
+- [x] Document constrained generation implementation
 
 ## Advanced Features
 - [ ] Implement model quantization tools
@@ -76,3 +81,32 @@
 - [ ] Implement performance optimizations
 - [ ] Add support for GGML/GGUF model loading progress callback
 - [ ] Implement model caching mechanism
+
+## Multi-modal Support
+- [x] Add image processing capabilities
+- [x] Add audio processing capabilities
+- [ ] Add video processing capabilities
+- [x] Implement multi-modal model support
+- [x] Add multi-modal inference API
+
+## LoRA Support
+- [x] Add LoRA adapter loading
+- [x] Add LoRA adapter application
+- [x] Add LoRA adapter removal
+- [x] Add multiple LoRA adapter support
+
+## Constrained Generation
+- [x] Add grammar-based constraints
+- [ ] Add regex-based constraints
+- [ ] Add JSON schema constraints
+- [ ] Add custom constraint support
+
+## Main Objectives - COMPLETED ✅
+- [x] Implement multi-modal support (images, audio)
+- [x] Implement LoRA adapter support
+- [x] Implement constrained generation support
+- [x] Create complete Flutter plugin structure
+- [x] Implement native C++ integration with llama.cpp
+- [x] Create Dart FFI bindings
+- [x] Create comprehensive documentation
+- [x] Create example Flutter application

@@ -4,6 +4,8 @@ import 'package:ffi/ffi.dart';
 
 // Define the native types
 typedef Llamafu = Pointer<Void>;
+typedef LlamafuLoraAdapter = Pointer<Void>;
+typedef LlamafuGrammarSampler = Pointer<Void>;
 typedef LlamafuError = Int32;
 
 // Error codes
@@ -12,17 +14,55 @@ const int LLAMAFU_ERROR_UNKNOWN = -1;
 const int LLAMAFU_ERROR_INVALID_PARAM = -2;
 const int LLAMAFU_ERROR_MODEL_LOAD_FAILED = -3;
 const int LLAMAFU_ERROR_OUT_OF_MEMORY = -4;
+const int LLAMAFU_ERROR_MULTIMODAL_NOT_SUPPORTED = -5;
+const int LLAMAFU_ERROR_LORA_LOAD_FAILED = -6;
+const int LLAMAFU_ERROR_LORA_NOT_FOUND = -7;
+const int LLAMAFU_ERROR_GRAMMAR_INIT_FAILED = -8;
 
 // Model parameters structure
 class LlamafuModelParams extends Struct {
   external Pointer<Utf8> model_path;
+  external Pointer<Utf8> mmproj_path;
   external Int32 n_threads;
   external Int32 n_ctx;
+  external Uint8 use_gpu;
 }
 
 // Inference parameters structure
 class LlamafuInferParams extends Struct {
   external Pointer<Utf8> prompt;
+  external Int32 max_tokens;
+  external Float temperature;
+}
+
+// Constrained generation parameters structure
+class LlamafuGrammarParams extends Struct {
+  external Pointer<Utf8> grammar_str;
+  external Pointer<Utf8> grammar_root;
+}
+
+// Multi-modal input types
+class LlamafuMediaType extends Struct {
+  @Int32()
+  external int type;
+  
+  static const int TEXT = 0;
+  static const int IMAGE = 1;
+  static const int AUDIO = 2;
+}
+
+// Multi-modal input data
+class LlamafuMediaInput extends Struct {
+  external Int32 type;
+  external Pointer<Utf8> data;
+  external IntPtr data_size;
+}
+
+// Multi-modal inference parameters
+class LlamafuMultimodalInferParams extends Struct {
+  external Pointer<Utf8> prompt;
+  external Pointer<LlamafuMediaInput> media_inputs;
+  external IntPtr n_media_inputs;
   external Int32 max_tokens;
   external Float temperature;
 }
@@ -44,6 +84,17 @@ typedef LlamafuCompleteC = LlamafuError Function(
 typedef LlamafuCompleteDart = int Function(
     Llamafu llamafu, Pointer<LlamafuInferParams> params, Pointer<Pointer<Utf8>> out_result);
 
+typedef LlamafuCompleteWithGrammarC = LlamafuError Function(
+    Llamafu llamafu, 
+    Pointer<LlamafuInferParams> params, 
+    Pointer<LlamafuGrammarParams> grammar_params, 
+    Pointer<Pointer<Utf8>> out_result);
+typedef LlamafuCompleteWithGrammarDart = int Function(
+    Llamafu llamafu, 
+    Pointer<LlamafuInferParams> params, 
+    Pointer<LlamafuGrammarParams> grammar_params, 
+    Pointer<Pointer<Utf8>> out_result);
+
 typedef LlamafuCompleteStreamC = LlamafuError Function(
     Llamafu llamafu,
     Pointer<LlamafuInferParams> params,
@@ -55,6 +106,66 @@ typedef LlamafuCompleteStreamDart = int Function(
     Pointer<NativeFunction<LlamafuStreamCallbackC>> callback,
     Pointer<Void> user_data);
 
+typedef LlamafuCompleteWithGrammarStreamC = LlamafuError Function(
+    Llamafu llamafu,
+    Pointer<LlamafuInferParams> params,
+    Pointer<LlamafuGrammarParams> grammar_params,
+    Pointer<NativeFunction<LlamafuStreamCallbackC>> callback,
+    Pointer<Void> user_data);
+typedef LlamafuCompleteWithGrammarStreamDart = int Function(
+    Llamafu llamafu,
+    Pointer<LlamafuInferParams> params,
+    Pointer<LlamafuGrammarParams> grammar_params,
+    Pointer<NativeFunction<LlamafuStreamCallbackC>> callback,
+    Pointer<Void> user_data);
+
+typedef LlamafuMultimodalCompleteC = LlamafuError Function(
+    Llamafu llamafu, Pointer<LlamafuMultimodalInferParams> params, Pointer<Pointer<Utf8>> out_result);
+typedef LlamafuMultimodalCompleteDart = int Function(
+    Llamafu llamafu, Pointer<LlamafuMultimodalInferParams> params, Pointer<Pointer<Utf8>> out_result);
+
+typedef LlamafuMultimodalCompleteStreamC = LlamafuError Function(
+    Llamafu llamafu,
+    Pointer<LlamafuMultimodalInferParams> params,
+    Pointer<NativeFunction<LlamafuStreamCallbackC>> callback,
+    Pointer<Void> user_data);
+typedef LlamafuMultimodalCompleteStreamDart = int Function(
+    Llamafu llamafu,
+    Pointer<LlamafuMultimodalInferParams> params,
+    Pointer<NativeFunction<LlamafuStreamCallbackC>> callback,
+    Pointer<Void> user_data);
+
+// LoRA adapter functions
+typedef LlamafuLoraAdapterInitC = LlamafuError Function(
+    Llamafu llamafu, Pointer<Utf8> lora_path, Pointer<LlamafuLoraAdapter> out_adapter);
+typedef LlamafuLoraAdapterInitDart = int Function(
+    Llamafu llamafu, Pointer<Utf8> lora_path, Pointer<LlamafuLoraAdapter> out_adapter);
+
+typedef LlamafuLoraAdapterApplyC = LlamafuError Function(
+    Llamafu llamafu, LlamafuLoraAdapter adapter, Float scale);
+typedef LlamafuLoraAdapterApplyDart = int Function(
+    Llamafu llamafu, LlamafuLoraAdapter adapter, double scale);
+
+typedef LlamafuLoraAdapterRemoveC = LlamafuError Function(
+    Llamafu llamafu, LlamafuLoraAdapter adapter);
+typedef LlamafuLoraAdapterRemoveDart = int Function(
+    Llamafu llamafu, LlamafuLoraAdapter adapter);
+
+typedef LlamafuLoraAdapterClearAllC = LlamafuError Function(Llamafu llamafu);
+typedef LlamafuLoraAdapterClearAllDart = int Function(Llamafu llamafu);
+
+typedef LlamafuLoraAdapterFreeC = Void Function(LlamafuLoraAdapter adapter);
+typedef LlamafuLoraAdapterFreeDart = void Function(LlamafuLoraAdapter adapter);
+
+// Grammar sampler functions
+typedef LlamafuGrammarSamplerInitC = LlamafuError Function(
+    Llamafu llamafu, Pointer<Utf8> grammar_str, Pointer<Utf8> grammar_root, Pointer<LlamafuGrammarSampler> out_sampler);
+typedef LlamafuGrammarSamplerInitDart = int Function(
+    Llamafu llamafu, Pointer<Utf8> grammar_str, Pointer<Utf8> grammar_root, Pointer<LlamafuGrammarSampler> out_sampler);
+
+typedef LlamafuGrammarSamplerFreeC = Void Function(LlamafuGrammarSampler sampler);
+typedef LlamafuGrammarSamplerFreeDart = void Function(LlamafuGrammarSampler sampler);
+
 typedef LlamafuFreeC = Void Function(Llamafu llamafu);
 typedef LlamafuFreeDart = void Function(Llamafu llamafu);
 
@@ -62,7 +173,18 @@ class LlamafuBindings {
   final DynamicLibrary _dylib;
   late final LlamafuInitDart _llamafuInit;
   late final LlamafuCompleteDart _llamafuComplete;
+  late final LlamafuCompleteWithGrammarDart _llamafuCompleteWithGrammar;
   late final LlamafuCompleteStreamDart _llamafuCompleteStream;
+  late final LlamafuCompleteWithGrammarStreamDart _llamafuCompleteWithGrammarStream;
+  late final LlamafuMultimodalCompleteDart _llamafuMultimodalComplete;
+  late final LlamafuMultimodalCompleteStreamDart _llamafuMultimodalCompleteStream;
+  late final LlamafuLoraAdapterInitDart _llamafuLoraAdapterInit;
+  late final LlamafuLoraAdapterApplyDart _llamafuLoraAdapterApply;
+  late final LlamafuLoraAdapterRemoveDart _llamafuLoraAdapterRemove;
+  late final LlamafuLoraAdapterClearAllDart _llamafuLoraAdapterClearAll;
+  late final LlamafuLoraAdapterFreeDart _llamafuLoraAdapterFree;
+  late final LlamafuGrammarSamplerInitDart _llamafuGrammarSamplerInit;
+  late final LlamafuGrammarSamplerFreeDart _llamafuGrammarSamplerFree;
   late final LlamafuFreeDart _llamafuFree;
 
   LlamafuBindings._(this._dylib) {
@@ -72,9 +194,42 @@ class LlamafuBindings {
     _llamafuComplete = _dylib
         .lookup<NativeFunction<LlamafuCompleteC>>('llamafu_complete')
         .asFunction<LlamafuCompleteDart>();
+    _llamafuCompleteWithGrammar = _dylib
+        .lookup<NativeFunction<LlamafuCompleteWithGrammarC>>('llamafu_complete_with_grammar')
+        .asFunction<LlamafuCompleteWithGrammarDart>();
     _llamafuCompleteStream = _dylib
         .lookup<NativeFunction<LlamafuCompleteStreamC>>('llamafu_complete_stream')
         .asFunction<LlamafuCompleteStreamDart>();
+    _llamafuCompleteWithGrammarStream = _dylib
+        .lookup<NativeFunction<LlamafuCompleteWithGrammarStreamC>>('llamafu_complete_with_grammar_stream')
+        .asFunction<LlamafuCompleteWithGrammarStreamDart>();
+    _llamafuMultimodalComplete = _dylib
+        .lookup<NativeFunction<LlamafuMultimodalCompleteC>>('llamafu_multimodal_complete')
+        .asFunction<LlamafuMultimodalCompleteDart>();
+    _llamafuMultimodalCompleteStream = _dylib
+        .lookup<NativeFunction<LlamafuMultimodalCompleteStreamC>>('llamafu_multimodal_complete_stream')
+        .asFunction<LlamafuMultimodalCompleteStreamDart>();
+    _llamafuLoraAdapterInit = _dylib
+        .lookup<NativeFunction<LlamafuLoraAdapterInitC>>('llamafu_lora_adapter_init')
+        .asFunction<LlamafuLoraAdapterInitDart>();
+    _llamafuLoraAdapterApply = _dylib
+        .lookup<NativeFunction<LlamafuLoraAdapterApplyC>>('llamafu_lora_adapter_apply')
+        .asFunction<LlamafuLoraAdapterApplyDart>();
+    _llamafuLoraAdapterRemove = _dylib
+        .lookup<NativeFunction<LlamafuLoraAdapterRemoveC>>('llamafu_lora_adapter_remove')
+        .asFunction<LlamafuLoraAdapterRemoveDart>();
+    _llamafuLoraAdapterClearAll = _dylib
+        .lookup<NativeFunction<LlamafuLoraAdapterClearAllC>>('llamafu_lora_adapter_clear_all')
+        .asFunction<LlamafuLoraAdapterClearAllDart>();
+    _llamafuLoraAdapterFree = _dylib
+        .lookup<NativeFunction<LlamafuLoraAdapterFreeC>>('llamafu_lora_adapter_free')
+        .asFunction<LlamafuLoraAdapterFreeDart>();
+    _llamafuGrammarSamplerInit = _dylib
+        .lookup<NativeFunction<LlamafuGrammarSamplerInitC>>('llamafu_grammar_sampler_init')
+        .asFunction<LlamafuGrammarSamplerInitDart>();
+    _llamafuGrammarSamplerFree = _dylib
+        .lookup<NativeFunction<LlamafuGrammarSamplerFreeC>>('llamafu_grammar_sampler_free')
+        .asFunction<LlamafuGrammarSamplerFreeDart>();
     _llamafuFree = _dylib
         .lookup<NativeFunction<LlamafuFreeC>>('llamafu_free')
         .asFunction<LlamafuFreeDart>();
@@ -96,12 +251,72 @@ class LlamafuBindings {
     return _llamafuComplete(llamafu, params, out_result);
   }
 
+  int llamafuCompleteWithGrammar(
+      Llamafu llamafu, 
+      Pointer<LlamafuInferParams> params, 
+      Pointer<LlamafuGrammarParams> grammar_params, 
+      Pointer<Pointer<Utf8>> out_result) {
+    return _llamafuCompleteWithGrammar(llamafu, params, grammar_params, out_result);
+  }
+
   int llamafuCompleteStream(
       Llamafu llamafu,
       Pointer<LlamafuInferParams> params,
       Pointer<NativeFunction<LlamafuStreamCallbackC>> callback,
       Pointer<Void> user_data) {
     return _llamafuCompleteStream(llamafu, params, callback, user_data);
+  }
+
+  int llamafuCompleteWithGrammarStream(
+      Llamafu llamafu,
+      Pointer<LlamafuInferParams> params,
+      Pointer<LlamafuGrammarParams> grammar_params,
+      Pointer<NativeFunction<LlamafuStreamCallbackC>> callback,
+      Pointer<Void> user_data) {
+    return _llamafuCompleteWithGrammarStream(llamafu, params, grammar_params, callback, user_data);
+  }
+
+  int llamafuMultimodalComplete(
+      Llamafu llamafu, Pointer<LlamafuMultimodalInferParams> params, Pointer<Pointer<Utf8>> out_result) {
+    return _llamafuMultimodalComplete(llamafu, params, out_result);
+  }
+
+  int llamafuMultimodalCompleteStream(
+      Llamafu llamafu,
+      Pointer<LlamafuMultimodalInferParams> params,
+      Pointer<NativeFunction<LlamafuStreamCallbackC>> callback,
+      Pointer<Void> user_data) {
+    return _llamafuMultimodalCompleteStream(llamafu, params, callback, user_data);
+  }
+
+  int llamafuLoraAdapterInit(
+      Llamafu llamafu, Pointer<Utf8> lora_path, Pointer<LlamafuLoraAdapter> out_adapter) {
+    return _llamafuLoraAdapterInit(llamafu, lora_path, out_adapter);
+  }
+
+  int llamafuLoraAdapterApply(Llamafu llamafu, LlamafuLoraAdapter adapter, double scale) {
+    return _llamafuLoraAdapterApply(llamafu, adapter, scale);
+  }
+
+  int llamafuLoraAdapterRemove(Llamafu llamafu, LlamafuLoraAdapter adapter) {
+    return _llamafuLoraAdapterRemove(llamafu, adapter);
+  }
+
+  int llamafuLoraAdapterClearAll(Llamafu llamafu) {
+    return _llamafuLoraAdapterClearAll(llamafu);
+  }
+
+  void llamafuLoraAdapterFree(LlamafuLoraAdapter adapter) {
+    _llamafuLoraAdapterFree(adapter);
+  }
+
+  int llamafuGrammarSamplerInit(
+      Llamafu llamafu, Pointer<Utf8> grammar_str, Pointer<Utf8> grammar_root, Pointer<LlamafuGrammarSampler> out_sampler) {
+    return _llamafuGrammarSamplerInit(llamafu, grammar_str, grammar_root, out_sampler);
+  }
+
+  void llamafuGrammarSamplerFree(LlamafuGrammarSampler sampler) {
+    _llamafuGrammarSamplerFree(sampler);
   }
 
   void llamafuFree(Llamafu llamafu) {
