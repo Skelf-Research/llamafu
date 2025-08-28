@@ -1,17 +1,20 @@
 # Llamafu
 
+[![Pub](https://img.shields.io/pub/v/llamafu.svg)](https://pub.dev/packages/llamafu)
+[![License](https://img.shields.io/github/license/dipankar/llamafu)](https://github.com/dipankar/llamafu/blob/main/LICENSE)
+
 A Flutter package for running language models on device with support for completion, instruct mode, tool calling, streaming, constrained generation, LoRA, and multi-modal inputs (images, audio).
 
 ## Features
 
-- Run language models directly on device (Android and iOS)
-- Support for text completion
-- Instruct mode for chat-like interactions
-- Tool calling capabilities
-- Streaming output
-- Constrained generation (GBNF grammars)
-- LoRA adapter support
-- Multi-modal support (images, audio)
+- 🚀 Run language models directly on device (Android and iOS)
+- 💬 Support for text completion
+- 🤖 Instruct mode for chat-like interactions
+- 🛠️ Tool calling capabilities
+- 🌊 Streaming output
+- 🔒 Constrained generation (GBNF grammars)
+- 🧬 LoRA adapter support
+- 🖼️🎧 Multi-modal support (images, audio)
 
 ## Prerequisites
 
@@ -27,6 +30,12 @@ Add `llamafu` as a dependency in your `pubspec.yaml` file:
 ```yaml
 dependencies:
   llamafu: ^0.0.1
+```
+
+Then run:
+
+```bash
+flutter pub get
 ```
 
 ## Usage
@@ -158,15 +167,15 @@ array  ::=
   )? "]" ws
 
 string ::=
-  "\\"" (
-    [^\\"\\\\\\x7F\\x00-\\x1F] |
+  "\"" (
+    [^\"\\\\\x7F\x00-\x1F] |
     "\\\\" (["\\\\bfnrt] | "u" [0-9a-fA-F]{4}) # escapes
-  )* "\\"" ws
+  )* "\"" ws
 
 number ::= ("-"? ([0-9] | [1-9] [0-9]{0,15})) ("." [0-9]+)? ([eE] [-+]? [0-9] [1-9]{0,15})? ws
 
 # Optional space: by convention, applied in this grammar after literal chars when allowed
-ws ::= | " " | "\\n" [ \\t]{0,20}
+ws ::= | " " | "\n" [ \t]{0,20}
 ''';
 
 // Generate text constrained to JSON format
@@ -227,9 +236,13 @@ Llamafu supports various multi-modal models through the llama.cpp MTMD library:
 1. Ensure you have Xcode installed
 2. Build the native libraries using Xcode or CMake
 
+## API Reference
+
+For detailed API documentation, please refer to the [API documentation](https://pub.dev/documentation/llamafu/latest/).
+
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 

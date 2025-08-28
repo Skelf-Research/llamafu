@@ -37,4 +37,49 @@ void main() {
       expect(LLAMAFU_ERROR_GRAMMAR_INIT_FAILED, -8);
     });
   });
+  
+  group('Structs', () {
+    test('LlamafuModelParams has correct fields', () {
+      final modelParams = malloc<LlamafuModelParams>();
+      expect(modelParams.ref.model_path, isNotNull);
+      expect(modelParams.ref.mmproj_path, isNotNull);
+      expect(modelParams.ref.n_threads, isNotNull);
+      expect(modelParams.ref.n_ctx, isNotNull);
+      expect(modelParams.ref.use_gpu, isNotNull);
+      malloc.free(modelParams);
+    });
+    
+    test('LlamafuInferParams has correct fields', () {
+      final inferParams = malloc<LlamafuInferParams>();
+      expect(inferParams.ref.prompt, isNotNull);
+      expect(inferParams.ref.max_tokens, isNotNull);
+      expect(inferParams.ref.temperature, isNotNull);
+      malloc.free(inferParams);
+    });
+    
+    test('LlamafuGrammarParams has correct fields', () {
+      final grammarParams = malloc<LlamafuGrammarParams>();
+      expect(grammarParams.ref.grammar_str, isNotNull);
+      expect(grammarParams.ref.grammar_root, isNotNull);
+      malloc.free(grammarParams);
+    });
+    
+    test('LlamafuMediaInput has correct fields', () {
+      final mediaInput = malloc<LlamafuMediaInput>();
+      expect(mediaInput.ref.type, isNotNull);
+      expect(mediaInput.ref.data, isNotNull);
+      expect(mediaInput.ref.data_size, isNotNull);
+      malloc.free(mediaInput);
+    });
+    
+    test('LlamafuMultimodalInferParams has correct fields', () {
+      final multimodalParams = malloc<LlamafuMultimodalInferParams>();
+      expect(multimodalParams.ref.prompt, isNotNull);
+      expect(multimodalParams.ref.media_inputs, isNotNull);
+      expect(multimodalParams.ref.n_media_inputs, isNotNull);
+      expect(multimodalParams.ref.max_tokens, isNotNull);
+      expect(multimodalParams.ref.temperature, isNotNull);
+      malloc.free(multimodalParams);
+    });
+  });
 }

@@ -3,6 +3,9 @@ import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'llamafu_bindings.dart';
 
+/// A Flutter package for running language models on device with support for
+/// completion, instruct mode, tool calling, streaming, constrained generation,
+/// and LoRA.
 class Llamafu {
   late final LlamafuBindings _bindings;
   late final Pointer<LlamafuModelParams> _modelParams;
@@ -12,6 +15,17 @@ class Llamafu {
 
   Llamafu._(this._bindings, this._modelParams, this._llamafuInstance);
 
+  /// Initializes the Llamafu library with the specified model.
+  ///
+  /// [modelPath] is the path to the GGUF model file.
+  /// [mmprojPath] is the optional path to the multi-modal projector file.
+  /// [threads] is the number of threads to use for inference (default: 4).
+  /// [contextSize] is the context size for the model (default: 512).
+  /// [useGpu] whether to use GPU for multi-modal processing (default: false).
+  ///
+  /// Returns a [Llamafu] instance that can be used for text generation.
+  ///
+  /// Throws an exception if initialization fails.
   static Future<Llamafu> init({
     required String modelPath,
     String? mmprojPath,  // Multi-modal projector path (optional)
@@ -42,6 +56,15 @@ class Llamafu {
     return Llamafu._(bindings, modelParams, outLlamafu.value);
   }
 
+  /// Performs text completion with the loaded model.
+  ///
+  /// [prompt] is the input text to generate from.
+  /// [maxTokens] is the maximum number of tokens to generate (default: 128).
+  /// [temperature] is the sampling temperature (default: 0.8).
+  ///
+  /// Returns the generated text.
+  ///
+  /// Throws an exception if completion fails.
   Future<String> complete({
     required String prompt,
     int maxTokens = 128,
@@ -75,6 +98,17 @@ class Llamafu {
     return dartResult;
   }
 
+  /// Performs text completion with grammar constraints.
+  ///
+  /// [prompt] is the input text to generate from.
+  /// [grammarStr] is the GBNF grammar string to constrain generation.
+  /// [grammarRoot] is the root symbol of the grammar.
+  /// [maxTokens] is the maximum number of tokens to generate (default: 128).
+  /// [temperature] is the sampling temperature (default: 0.8).
+  ///
+  /// Returns the generated text that conforms to the specified grammar.
+  ///
+  /// Throws an exception if completion fails.
   Future<String> completeWithGrammar({
     required String prompt,
     String? grammarStr,
@@ -120,6 +154,16 @@ class Llamafu {
     return dartResult;
   }
 
+  /// Performs multi-modal completion with text and media inputs.
+  ///
+  /// [prompt] is the input text prompt that may contain media placeholders.
+  /// [mediaInputs] is a list of [MediaInput] objects containing media data.
+  /// [maxTokens] is the maximum number of tokens to generate (default: 128).
+  /// [temperature] is the sampling temperature (default: 0.8).
+  ///
+  /// Returns the generated text based on both text and media inputs.
+  ///
+  /// Throws an exception if multi-modal completion fails.
   Future<String> multimodalComplete({
     required String prompt,
     List<MediaInput> mediaInputs = const [],
@@ -173,7 +217,13 @@ class Llamafu {
     return dartResult;
   }
 
-  // LoRA adapter methods
+  /// Loads a LoRA adapter from the specified file path.
+  ///
+  /// [loraPath] is the path to the LoRA adapter GGUF file.
+  ///
+  /// Returns a [LoraAdapter] instance that can be applied to the model.
+  ///
+  /// Throws an exception if the LoRA adapter fails to load.
   Future<LoraAdapter> loadLoraAdapter(String loraPath) async {
     final loraPathPtr = loraPath.toNativeUtf8();
     final outAdapter = malloc<Pointer<Void>>();
@@ -192,6 +242,12 @@ class Llamafu {
     return adapter;
   }
 
+  /// Applies a LoRA adapter to the model with the specified scale.
+  ///
+  /// [adapter] is the LoRA adapter to apply.
+  /// [scale] is the scaling factor for the adapter (default: 1.0).
+  ///
+  /// Throws an exception if the LoRA adapter fails to apply.
   Future<void> applyLoraAdapter(LoraAdapter adapter, {double scale = 1.0}) async {
     final result = _bindings.llamafuLoraAdapterApply(_llamafuInstance, adapter._nativeAdapter, scale);
     if (result != 0) {
@@ -199,6 +255,11 @@ class Llamafu {
     }
   }
 
+  /// Removes a LoRA adapter from the model.
+  ///
+  /// [adapter] is the LoRA adapter to remove.
+  ///
+  /// Throws an exception if the LoRA adapter fails to remove.
   Future<void> removeLoraAdapter(LoraAdapter adapter) async {
     final result = _bindings.llamafuLoraAdapterRemove(_llamafuInstance, adapter._nativeAdapter);
     if (result != 0) {
@@ -206,6 +267,9 @@ class Llamafu {
     }
   }
 
+  /// Clears all LoRA adapters from the model.
+  ///
+  /// Throws an exception if clearing the adapters fails.
   Future<void> clearAllLoraAdapters() async {
     final result = _bindings.llamafuLoraAdapterClearAll(_llamafuInstance);
     if (result != 0) {
@@ -219,7 +283,14 @@ class Llamafu {
     _loraAdapters.clear();
   }
 
-  // Grammar sampler methods
+  /// Creates a grammar sampler for constrained generation.
+  ///
+  /// [grammarStr] is the GBNF grammar string to constrain generation.
+  /// [grammarRoot] is the root symbol of the grammar.
+  ///
+  /// Returns a [GrammarSampler] instance that can be used for constrained generation.
+  ///
+  /// Throws an exception if the grammar sampler fails to initialize.
   Future<GrammarSampler> createGrammarSampler(String grammarStr, String grammarRoot) async {
     final grammarStrPtr = grammarStr.toNativeUtf8();
     final grammarRootPtr = grammarRoot.toNativeUtf8();
@@ -241,6 +312,10 @@ class Llamafu {
     return sampler;
   }
 
+  /// Cleans up resources and frees memory used by the Llamafu instance.
+  ///
+  /// This method should be called when the Llamafu instance is no longer needed
+  /// to prevent memory leaks.
   void close() {
     // Free all LoRA adapters
     for (final adapter in _loraAdapters) {
@@ -259,21 +334,34 @@ class Llamafu {
   }
 }
 
-// Media input types for multi-modal inference
+/// Media input types for multi-modal inference.
 enum MediaType {
+  /// Text input type.
   text,
+  
+  /// Image input type.
   image,
+  
+  /// Audio input type.
   audio,
 }
 
+/// Represents a media input for multi-modal inference.
 class MediaInput {
+  /// The type of media input.
   final MediaType type;
-  final String data; // Path to file or base64 encoded data
+  
+  /// The data for the media input, either a file path or base64 encoded data.
+  final String data;
 
+  /// Creates a new media input.
+  ///
+  /// [type] is the type of media input.
+  /// [data] is the data for the media input, either a file path or base64 encoded data.
   MediaInput({required this.type, required this.data});
 }
 
-// LoRA adapter class
+/// Represents a LoRA adapter that can be applied to a Llamafu model.
 class LoraAdapter {
   final LlamafuBindings _bindings;
   final Pointer<Void> _nativeAdapter;
@@ -281,7 +369,7 @@ class LoraAdapter {
   LoraAdapter._(this._bindings, this._nativeAdapter);
 }
 
-// Grammar sampler class
+/// Represents a grammar sampler for constrained generation.
 class GrammarSampler {
   final LlamafuBindings _bindings;
   final Pointer<Void> _nativeSampler;

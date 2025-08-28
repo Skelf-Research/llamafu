@@ -2,69 +2,113 @@ import 'dart:ffi';
 import 'dart:io';
 import 'package:ffi/ffi.dart';
 
-// Define the native types
+/// Opaque handle to the Llamafu instance.
 typedef Llamafu = Pointer<Void>;
+
+/// Opaque handle to the LoRA adapter.
 typedef LlamafuLoraAdapter = Pointer<Void>;
+
+/// Opaque handle to the grammar sampler.
 typedef LlamafuGrammarSampler = Pointer<Void>;
+
+/// Error code type returned by native functions.
 typedef LlamafuError = Int32;
 
-// Error codes
+/// Operation completed successfully.
 const int LLAMAFU_SUCCESS = 0;
+
+/// An unknown error occurred.
 const int LLAMAFU_ERROR_UNKNOWN = -1;
+
+/// An invalid parameter was provided.
 const int LLAMAFU_ERROR_INVALID_PARAM = -2;
+
+/// Failed to load the model.
 const int LLAMAFU_ERROR_MODEL_LOAD_FAILED = -3;
+
+/// Out of memory error.
 const int LLAMAFU_ERROR_OUT_OF_MEMORY = -4;
+
+/// Multi-modal processing is not supported.
 const int LLAMAFU_ERROR_MULTIMODAL_NOT_SUPPORTED = -5;
+
+/// Failed to load the LoRA adapter.
 const int LLAMAFU_ERROR_LORA_LOAD_FAILED = -6;
+
+/// The specified LoRA adapter was not found.
 const int LLAMAFU_ERROR_LORA_NOT_FOUND = -7;
+
+/// Failed to initialize the grammar sampler.
 const int LLAMAFU_ERROR_GRAMMAR_INIT_FAILED = -8;
 
-// Model parameters structure
-class LlamafuModelParams extends Struct {
+/// Model parameters for initializing the Llamafu library.
+final class LlamafuModelParams extends Struct {
+  /// Path to the GGUF model file.
   external Pointer<Utf8> model_path;
+  
+  /// Path to the multi-modal projector file (optional).
   external Pointer<Utf8> mmproj_path;
-  external Int32 n_threads;
-  external Int32 n_ctx;
-  external Uint8 use_gpu;
+  
+  /// Number of threads to use for inference.
+  @Int32()
+  external int n_threads;
+  
+  /// Context size for the model.
+  @Int32()
+  external int n_ctx;
+  
+  /// Whether to use GPU for multi-modal processing.
+  @Uint8()
+  external int use_gpu;
 }
 
-// Inference parameters structure
-class LlamafuInferParams extends Struct {
+/// Inference parameters structure
+final class LlamafuInferParams extends Struct {
   external Pointer<Utf8> prompt;
-  external Int32 max_tokens;
-  external Float temperature;
+  
+  @Int32()
+  external int max_tokens;
+  
+  @Float()
+  external double temperature;
 }
 
-// Constrained generation parameters structure
-class LlamafuGrammarParams extends Struct {
+/// Constrained generation parameters structure
+final class LlamafuGrammarParams extends Struct {
   external Pointer<Utf8> grammar_str;
   external Pointer<Utf8> grammar_root;
 }
 
-// Multi-modal input types
-class LlamafuMediaType extends Struct {
-  @Int32()
-  external int type;
-  
+/// Multi-modal input types
+class LlamafuMediaType {
   static const int TEXT = 0;
   static const int IMAGE = 1;
   static const int AUDIO = 2;
 }
 
-// Multi-modal input data
-class LlamafuMediaInput extends Struct {
-  external Int32 type;
+/// Multi-modal input data
+final class LlamafuMediaInput extends Struct {
+  @Int32()
+  external int type;
   external Pointer<Utf8> data;
-  external IntPtr data_size;
+  
+  @IntPtr()
+  external int data_size;
 }
 
-// Multi-modal inference parameters
-class LlamafuMultimodalInferParams extends Struct {
+/// Multi-modal inference parameters
+final class LlamafuMultimodalInferParams extends Struct {
   external Pointer<Utf8> prompt;
   external Pointer<LlamafuMediaInput> media_inputs;
-  external IntPtr n_media_inputs;
-  external Int32 max_tokens;
-  external Float temperature;
+  
+  @IntPtr()
+  external int n_media_inputs;
+  
+  @Int32()
+  external int max_tokens;
+  
+  @Float()
+  external double temperature;
 }
 
 // Callback for streaming output
@@ -169,7 +213,7 @@ typedef LlamafuGrammarSamplerFreeDart = void Function(LlamafuGrammarSampler samp
 typedef LlamafuFreeC = Void Function(Llamafu llamafu);
 typedef LlamafuFreeDart = void Function(Llamafu llamafu);
 
-class LlamafuBindings {
+final class LlamafuBindings {
   final DynamicLibrary _dylib;
   late final LlamafuInitDart _llamafuInit;
   late final LlamafuCompleteDart _llamafuComplete;
