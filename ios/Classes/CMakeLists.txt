@@ -3,7 +3,19 @@ cmake_minimum_required(VERSION 3.4.1)
 project(llamafu)
 
 # Set the path to the llama.cpp directory
-set(LLAMA_CPP_DIR "/home/dipankar/Github/llama.cpp")
+if(NOT DEFINED LLAMA_CPP_DIR)
+    if(DEFINED ENV{LLAMA_CPP_DIR})
+        set(LLAMA_CPP_DIR $ENV{LLAMA_CPP_DIR})
+    else()
+        # Use the git submodule by default
+        set(LLAMA_CPP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../llama.cpp")
+    endif()
+endif()
+
+# Verify that llama.cpp directory exists
+if(NOT EXISTS "${LLAMA_CPP_DIR}/CMakeLists.txt")
+    message(FATAL_ERROR "llama.cpp not found at ${LLAMA_CPP_DIR}. Please run 'git submodule update --init --recursive' to initialize the llama.cpp submodule.")
+endif()
 
 # Add the llama.cpp include directories
 include_directories(
@@ -14,26 +26,15 @@ include_directories(
     ${LLAMA_CPP_DIR}/tools/mtmd
 )
 
-# Add the pre-built libraries
-add_library(libllama SHARED IMPORTED)
-set_target_properties(libllama PROPERTIES IMPORTED_LOCATION
-    ${LLAMA_CPP_DIR}/build/bin/libllama.so)
+# Build llama.cpp as part of our build process
+set(GGML_STATIC ON)
+set(LLAMA_STATIC ON)
+set(LLAMA_BUILD_TESTS OFF)
+set(LLAMA_BUILD_EXAMPLES OFF)
+set(LLAMA_BUILD_SERVER OFF)
 
-add_library(libggml SHARED IMPORTED)
-set_target_properties(libggml PROPERTIES IMPORTED_LOCATION
-    ${LLAMA_CPP_DIR}/build/bin/libggml.so)
-
-add_library(libggml_cpu SHARED IMPORTED)
-set_target_properties(libggml_cpu PROPERTIES IMPORTED_LOCATION
-    ${LLAMA_CPP_DIR}/build/bin/libggml-cpu.so)
-
-add_library(libggml_base SHARED IMPORTED)
-set_target_properties(libggml_base PROPERTIES IMPORTED_LOCATION
-    ${LLAMA_CPP_DIR}/build/bin/libggml-base.so)
-
-add_library(libmtmd SHARED IMPORTED)
-set_target_properties(libmtmd PROPERTIES IMPORTED_LOCATION
-    ${LLAMA_CPP_DIR}/build/bin/libmtmd.so)
+# Add llama.cpp subdirectory
+add_subdirectory(${LLAMA_CPP_DIR} llama.cpp EXCLUDE_FROM_ALL)
 
 # Create the llamafu library
 add_library(
@@ -45,11 +46,8 @@ add_library(
 # For iOS, we need to link the libraries
 target_link_libraries(
     llamafu
-    libllama
-    libggml
-    libggml_cpu
-    libggml_base
-    libmtmd
+    llama
+    ggml
 )
 
 # Create a test program
@@ -61,4 +59,6 @@ add_executable(
 target_link_libraries(
     test_llamafu
     llamafu
+    llama
+    ggml
 )

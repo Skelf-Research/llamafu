@@ -48,7 +48,11 @@ android {
 
         externalNativeBuild {
             cmake {
-                arguments "-DLLAMA_CPP_DIR=/home/dipankar/Github/llama.cpp"
+                def llamaCppDir = System.getenv("LLAMA_CPP_DIR") ?: project.findProperty("llama.cpp.dir") ?: "${projectDir}/../../../llama.cpp"
+                arguments "-DLLAMA_CPP_DIR=${llamaCppDir}"
+
+                // Optimize build for release
+                cppFlags "-O3", "-DNDEBUG"
             }
         }
     }

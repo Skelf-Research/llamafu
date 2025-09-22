@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:ffi';
+import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'llamafu_bindings.dart';
 
@@ -13,6 +15,61 @@ class Llamafu {
   final List<GrammarSampler> _grammarSamplers = [];
 
   Llamafu._(this._bindings, this._modelParams, this._llamafuInstance);
+
+  /// Maximum allowed length for prompts to prevent excessive memory usage
+  static const int maxPromptLength = 100000;
+
+  /// Maximum allowed number of tokens to prevent resource exhaustion
+  static const int maxTokens = 8192;
+
+  /// Minimum and maximum temperature values
+  static const double minTemperature = 0.0;
+  static const double maxTemperature = 2.0;
+
+  /// Validates file path for security
+  static bool _isValidFilePath(String filePath) {
+    // Check for null bytes
+    if (filePath.contains('\0')) return false;
+
+    // Check for path traversal attempts
+    if (filePath.contains('..')) return false;
+
+    // Check for absolute paths with suspicious patterns
+    if (filePath.startsWith('/etc/') ||
+        filePath.startsWith('/usr/') ||
+        filePath.startsWith('/system/') ||
+        filePath.contains('/proc/') ||
+        filePath.contains('/dev/')) return false;
+
+    // Check file length
+    if (filePath.length > 4096) return false;
+
+    return true;
+  }
+
+  /// Validates numerical parameters
+  static bool _isValidParameter(double value, double min, double max) {
+    return value >= min && value <= max && value.isFinite;
+  }
+
+  /// Validates prompt content
+  static bool _isValidPrompt(String prompt) {
+    // Check for null bytes
+    if (prompt.contains('\0')) return false;
+
+    // Check length
+    if (prompt.length > maxPromptLength) return false;
+
+    // Check for control characters (except common ones like newline, tab)
+    for (int i = 0; i < prompt.length; i++) {
+      final codeUnit = prompt.codeUnitAt(i);
+      if (codeUnit < 32 && codeUnit != 9 && codeUnit != 10 && codeUnit != 13) {
+        return false;
+      }
+    }
+
+    return true;
+  }
 
   /// Initializes the Llamafu library with the specified model.
   ///
@@ -32,6 +89,36 @@ class Llamafu {
     int contextSize = 512,
     bool useGpu = false,
   }) async {
+    // Input validation
+    if (!_isValidFilePath(modelPath)) {
+      throw ArgumentError('Invalid model path: $modelPath');
+    }
+
+    if (mmprojPath != null && !_isValidFilePath(mmprojPath)) {
+      throw ArgumentError('Invalid multi-modal projector path: $mmprojPath');
+    }
+
+    if (threads < 1 || threads > 64) {
+      throw ArgumentError('Invalid thread count: $threads (must be 1-64)');
+    }
+
+    if (contextSize < 1 || contextSize > 32768) {
+      throw ArgumentError('Invalid context size: $contextSize (must be 1-32768)');
+    }
+
+    // Check if model file exists and is readable
+    final modelFile = File(modelPath);
+    if (!await modelFile.exists()) {
+      throw ArgumentError('Model file does not exist: $modelPath');
+    }
+
+    if (mmprojPath != null) {
+      final mmprojFile = File(mmprojPath);
+      if (!await mmprojFile.exists()) {
+        throw ArgumentError('Multi-modal projector file does not exist: $mmprojPath');
+      }
+    }
+
     final bindings = await LlamafuBindings.init();
 
     // Allocate and initialize model parameters
@@ -69,6 +156,19 @@ class Llamafu {
     int maxTokens = 128,
     double temperature = 0.8,
   }) async {
+    // Input validation
+    if (!_isValidPrompt(prompt)) {
+      throw ArgumentError('Invalid prompt: contains invalid characters or is too long');
+    }
+
+    if (maxTokens < 1 || maxTokens > Llamafu.maxTokens) {
+      throw ArgumentError('Invalid maxTokens: $maxTokens (must be 1-${Llamafu.maxTokens})');
+    }
+
+    if (!_isValidParameter(temperature, minTemperature, maxTemperature)) {
+      throw ArgumentError('Invalid temperature: $temperature (must be $minTemperature-$maxTemperature)');
+    }
+
     // Allocate and initialize inference parameters
     final inferParams = malloc<LlamafuInferParams>();
     inferParams.ref.prompt = prompt.toNativeUtf8();
@@ -95,6 +195,26 @@ class Llamafu {
     malloc.free(outResult);
 
     return dartResult;
+  }
+
+  /// Performs streaming text completion with the loaded model.
+  ///
+  /// Note: Streaming functionality is currently not available due to FFI callback
+  /// limitations. This method will be implemented in a future version.
+  ///
+  /// [prompt] is the input text to generate from.
+  /// [maxTokens] is the maximum number of tokens to generate (default: 128).
+  /// [temperature] is the sampling temperature (default: 0.8).
+  ///
+  /// Returns a [Stream] of tokens as they are generated.
+  ///
+  /// Throws an exception as streaming is not yet implemented.
+  Stream<String> completeStream({
+    required String prompt,
+    int maxTokens = 128,
+    double temperature = 0.8,
+  }) async* {
+    throw UnimplementedError('Streaming completion is not yet implemented. Use complete() instead.');
   }
 
   /// Performs text completion with grammar constraints.
@@ -151,6 +271,30 @@ class Llamafu {
     malloc.free(outResult);
 
     return dartResult;
+  }
+
+  /// Performs streaming text completion with grammar constraints.
+  ///
+  /// Note: Streaming functionality is currently not available due to FFI callback
+  /// limitations. This method will be implemented in a future version.
+  ///
+  /// [prompt] is the input text to generate from.
+  /// [grammarStr] is the GBNF grammar string to constrain generation.
+  /// [grammarRoot] is the root symbol of the grammar.
+  /// [maxTokens] is the maximum number of tokens to generate (default: 128).
+  /// [temperature] is the sampling temperature (default: 0.8).
+  ///
+  /// Returns a [Stream] of tokens that conform to the specified grammar.
+  ///
+  /// Throws an exception as streaming is not yet implemented.
+  Stream<String> completeWithGrammarStream({
+    required String prompt,
+    String? grammarStr,
+    String? grammarRoot,
+    int maxTokens = 128,
+    double temperature = 0.8,
+  }) async* {
+    throw UnimplementedError('Streaming completion with grammar is not yet implemented. Use completeWithGrammar() instead.');
   }
 
   /// Performs multi-modal completion with text and media inputs.
@@ -224,6 +368,17 @@ class Llamafu {
   ///
   /// Throws an exception if the LoRA adapter fails to load.
   Future<LoraAdapter> loadLoraAdapter(String loraPath) async {
+    // Input validation
+    if (!_isValidFilePath(loraPath)) {
+      throw ArgumentError('Invalid LoRA adapter path: $loraPath');
+    }
+
+    // Check if LoRA file exists
+    final loraFile = File(loraPath);
+    if (!await loraFile.exists()) {
+      throw ArgumentError('LoRA adapter file does not exist: $loraPath');
+    }
+
     final loraPathPtr = loraPath.toNativeUtf8();
     final outAdapter = malloc<Pointer<Void>>();
 
@@ -248,6 +403,11 @@ class Llamafu {
   ///
   /// Throws an exception if the LoRA adapter fails to apply.
   Future<void> applyLoraAdapter(LoraAdapter adapter, {double scale = 1.0}) async {
+    // Input validation
+    if (!_isValidParameter(scale, -10.0, 10.0)) {
+      throw ArgumentError('Invalid LoRA scale: $scale (must be -10.0 to 10.0)');
+    }
+
     final result = _bindings.llamafuLoraAdapterApply(_llamafuInstance, adapter._nativeAdapter, scale);
     if (result != 0) {
       throw Exception('Failed to apply LoRA adapter: $result');
@@ -366,6 +526,10 @@ class LoraAdapter {
   final Pointer<Void> _nativeAdapter;
 
   LoraAdapter._(this._bindings, this._nativeAdapter);
+
+  void dispose() {
+    _bindings.llamafuLoraAdapterFree(_nativeAdapter);
+  }
 }
 
 /// Represents a grammar sampler for constrained generation.
@@ -374,4 +538,8 @@ class GrammarSampler {
   final Pointer<Void> _nativeSampler;
 
   GrammarSampler._(this._bindings, this._nativeSampler);
+
+  void dispose() {
+    _bindings.llamafuGrammarSamplerFree(_nativeSampler);
+  }
 }

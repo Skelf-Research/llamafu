@@ -129,6 +129,47 @@ class _LlamafuExampleHomePageState extends State<LlamafuExampleHomePage> {
     }
   }
 
+  Future<void> _generateTextStream() async {
+    if (_llamafu == null) {
+      setState(() {
+        _result = 'Please initialize the model first';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _result = 'Attempting streaming text generation...\n\n';
+    });
+
+    try {
+      await for (final token in _llamafu!.completeStream(
+        prompt: _promptController.text,
+        maxTokens: int.tryParse(_maxTokensController.text) ?? 128,
+        temperature: double.tryParse(_temperatureController.text) ?? 0.8,
+      )) {
+        setState(() {
+          _result += token;
+        });
+      }
+
+      setState(() {
+        _isLoading = false;
+      });
+    } on UnimplementedError catch (e) {
+      setState(() {
+        _result = 'Streaming not yet implemented: ${e.message}\n\nFalling back to regular completion...';
+      });
+      // Fall back to regular completion
+      await _generateText();
+    } catch (e) {
+      setState(() {
+        _result = 'Error: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
   Future<void> _generateMultimodal() async {
     if (_llamafu == null) {
       setState(() {
@@ -445,6 +486,16 @@ ws ::= | \" \" | \"\\n\" [ \\t]{0,20}
                                     child: CircularProgressIndicator(strokeWidth: 2),
                                   )
                                 : const Text('Generate Text'),
+                          ),
+                          ElevatedButton(
+                            onPressed: _isLoading ? null : _generateTextStream,
+                            child: _isLoading
+                                ? const SizedBox(
+                                    height: 16,
+                                    width: 16,
+                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                  )
+                                : const Text('Stream Text'),
                           ),
                           ElevatedButton(
                             onPressed: _isLoading ? null : _generateMultimodal,

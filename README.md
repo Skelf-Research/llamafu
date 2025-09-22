@@ -217,24 +217,46 @@ Llamafu supports various multi-modal models through the llama.cpp MTMD library:
 ### Mixed Modalities
 - Qwen2.5 Omni (audio + vision)
 
-## Building
+## Building from Source
 
-### Android
+Llamafu includes llama.cpp as a git submodule for easy building:
 
-1. Ensure you have the Android NDK installed
-2. Build the native libraries:
-   ```bash
-   cd android/src/main/cpp
-   mkdir build
-   cd build
-   cmake .. -DLLAMA_CPP_DIR=/path/to/llama.cpp
-   make
-   ```
+### Quick Start
 
-### iOS
+```bash
+# Clone with submodules
+git clone --recursive https://github.com/your-username/llamafu.git
 
-1. Ensure you have Xcode installed
-2. Build the native libraries using Xcode or CMake
+# Or initialize submodules after cloning
+cd llamafu
+git submodule update --init --recursive
+```
+
+### Platform Builds
+
+#### Android
+```bash
+# Simple build (automatic)
+./build_android.sh
+
+# Or use Flutter build
+flutter build apk
+```
+
+#### iOS
+```bash
+# Simple build (automatic)
+./build_ios.sh
+
+# Or use Flutter build
+flutter build ios
+```
+
+### Requirements
+- **Android**: Android NDK 21+
+- **iOS**: Xcode 12+
+- **CMake**: 3.4.1+
+- **Git**: For submodule management
 
 ## API Reference
 
