@@ -1,0 +1,333 @@
+name: Build Native Libraries
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'android/src/main/cpp/**'
+      - 'ios/Classes/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/build-native.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'android/src/main/cpp/**'
+      - 'ios/Classes/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/build-native.yml'
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'Release'
+        type: choice
+        options:
+        - Release
+        - Debug
+
+env:
+  BUILD_TYPE: ${{ github.event.inputs.build_type || 'Release' }}
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86_64, x86]
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Android NDK
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r25c
+        add-to-path: false
+
+    - name: Setup CMake
+      uses: jwlawson/actions-setup-cmake@v1.14
+      with:
+        cmake-version: '3.22.x'
+
+    - name: Configure CMake for Android
+      run: |
+        cmake -B build-android-${{ matrix.abi }} \
+          -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_ROOT/build/cmake/android.toolchain.cmake \
+          -DANDROID_ABI=${{ matrix.abi }} \
+          -DANDROID_PLATFORM=android-21 \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+          -DLLAMAFU_ENABLE_GPU=ON \
+          -DLLAMAFU_ENABLE_CUDA=OFF \
+          -DLLAMAFU_ENABLE_OPENCL=OFF
+
+    - name: Build Android
+      run: cmake --build build-android-${{ matrix.abi }} --config ${{ env.BUILD_TYPE }} -j$(nproc)
+
+    - name: Package Android Artifacts
+      run: |
+        mkdir -p artifacts/android/${{ matrix.abi }}
+        cp build-android-${{ matrix.abi }}/lib/android/${{ matrix.abi }}/libllamafu_native.a artifacts/android/${{ matrix.abi }}/
+        cp android/src/main/cpp/llamafu.h artifacts/android/${{ matrix.abi }}/
+
+    - name: Upload Android Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: android-${{ matrix.abi }}-${{ env.BUILD_TYPE }}
+        path: artifacts/android/${{ matrix.abi }}
+        retention-days: 30
+
+  build-ios:
+    runs-on: macos-14
+    strategy:
+      matrix:
+        platform: [ios, ios-simulator]
+        arch: [arm64, x86_64]
+        exclude:
+          - platform: ios
+            arch: x86_64
+          - platform: ios-simulator
+            arch: arm64
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Xcode
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: latest-stable
+
+    - name: Configure CMake for iOS
+      run: |
+        if [ "${{ matrix.platform }}" = "ios" ]; then
+          SDK="iphoneos"
+          DEPLOYMENT_TARGET="12.0"
+        else
+          SDK="iphonesimulator"
+          DEPLOYMENT_TARGET="12.0"
+        fi
+
+        cmake -B build-${{ matrix.platform }}-${{ matrix.arch }} \
+          -DCMAKE_SYSTEM_NAME=iOS \
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=$DEPLOYMENT_TARGET \
+          -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
+          -DCMAKE_OSX_SYSROOT=$(xcrun --sdk $SDK --show-sdk-path) \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+          -DLLAMAFU_ENABLE_GPU=ON \
+          -DLLAMAFU_ENABLE_METAL=ON \
+          -DLLAMAFU_ENABLE_CUDA=OFF \
+          -DLLAMAFU_ENABLE_OPENCL=OFF \
+          -DIOS=ON
+
+    - name: Build iOS
+      run: cmake --build build-${{ matrix.platform }}-${{ matrix.arch }} --config ${{ env.BUILD_TYPE }} -j$(sysctl -n hw.ncpu)
+
+    - name: Package iOS Artifacts
+      run: |
+        mkdir -p artifacts/ios/${{ matrix.platform }}/${{ matrix.arch }}
+        cp build-${{ matrix.platform }}-${{ matrix.arch }}/lib/ios/${{ matrix.arch }}/libllamafu_native.a artifacts/ios/${{ matrix.platform }}/${{ matrix.arch }}/
+        cp ios/Classes/llamafu.h artifacts/ios/${{ matrix.platform }}/${{ matrix.arch }}/
+
+    - name: Upload iOS Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ios-${{ matrix.platform }}-${{ matrix.arch }}-${{ env.BUILD_TYPE }}
+        path: artifacts/ios/${{ matrix.platform }}/${{ matrix.arch }}
+        retention-days: 30
+
+  build-macos:
+    runs-on: macos-14
+    strategy:
+      matrix:
+        arch: [arm64, x86_64]
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Xcode
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: latest-stable
+
+    - name: Configure CMake for macOS
+      run: |
+        cmake -B build-macos-${{ matrix.arch }} \
+          -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=10.15 \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+          -DLLAMAFU_ENABLE_GPU=ON \
+          -DLLAMAFU_ENABLE_METAL=ON \
+          -DLLAMAFU_ENABLE_CUDA=OFF \
+          -DLLAMAFU_ENABLE_OPENCL=OFF
+
+    - name: Build macOS
+      run: cmake --build build-macos-${{ matrix.arch }} --config ${{ env.BUILD_TYPE }} -j$(sysctl -n hw.ncpu)
+
+    - name: Package macOS Artifacts
+      run: |
+        mkdir -p artifacts/macos/${{ matrix.arch }}
+        cp build-macos-${{ matrix.arch }}/lib/macos/${{ matrix.arch }}/libllamafu_native.a artifacts/macos/${{ matrix.arch }}/
+        cp android/src/main/cpp/llamafu.h artifacts/macos/${{ matrix.arch }}/
+
+    - name: Upload macOS Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-${{ matrix.arch }}-${{ env.BUILD_TYPE }}
+        path: artifacts/macos/${{ matrix.arch }}
+        retention-days: 30
+
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+        include:
+          - arch: x64
+            cc: gcc
+            cxx: g++
+          - arch: arm64
+            cc: aarch64-linux-gnu-gcc
+            cxx: aarch64-linux-gnu-g++
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake
+        if [ "${{ matrix.arch }}" = "arm64" ]; then
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+        fi
+
+    - name: Configure CMake for Linux
+      run: |
+        export CC=${{ matrix.cc }}
+        export CXX=${{ matrix.cxx }}
+
+        cmake -B build-linux-${{ matrix.arch }} \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+          -DLLAMAFU_ENABLE_GPU=ON \
+          -DLLAMAFU_ENABLE_CUDA=OFF \
+          -DLLAMAFU_ENABLE_OPENCL=ON
+
+    - name: Build Linux
+      run: cmake --build build-linux-${{ matrix.arch }} --config ${{ env.BUILD_TYPE }} -j$(nproc)
+
+    - name: Package Linux Artifacts
+      run: |
+        mkdir -p artifacts/linux/${{ matrix.arch }}
+        cp build-linux-${{ matrix.arch }}/lib/linux/${{ matrix.arch }}/libllamafu_native.a artifacts/linux/${{ matrix.arch }}/
+        cp android/src/main/cpp/llamafu.h artifacts/linux/${{ matrix.arch }}/
+
+    - name: Upload Linux Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: linux-${{ matrix.arch }}-${{ env.BUILD_TYPE }}
+        path: artifacts/linux/${{ matrix.arch }}
+        retention-days: 30
+
+  build-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [x64, x86]
+        include:
+          - arch: x64
+            generator: "Visual Studio 17 2022"
+            platform: "x64"
+          - arch: x86
+            generator: "Visual Studio 17 2022"
+            platform: "Win32"
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Configure CMake for Windows
+      run: |
+        cmake -B build-windows-${{ matrix.arch }} `
+          -G "${{ matrix.generator }}" `
+          -A ${{ matrix.platform }} `
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} `
+          -DLLAMAFU_ENABLE_GPU=ON `
+          -DLLAMAFU_ENABLE_CUDA=OFF `
+          -DLLAMAFU_ENABLE_OPENCL=OFF
+
+    - name: Build Windows
+      run: cmake --build build-windows-${{ matrix.arch }} --config ${{ env.BUILD_TYPE }} -j $env:NUMBER_OF_PROCESSORS
+
+    - name: Package Windows Artifacts
+      run: |
+        New-Item -ItemType Directory -Force -Path artifacts/windows/${{ matrix.arch }}
+        Copy-Item build-windows-${{ matrix.arch }}/lib/windows/${{ matrix.arch }}/${{ env.BUILD_TYPE }}/llamafu_native.lib artifacts/windows/${{ matrix.arch }}/
+        Copy-Item android/src/main/cpp/llamafu.h artifacts/windows/${{ matrix.arch }}/
+
+    - name: Upload Windows Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-${{ matrix.arch }}-${{ env.BUILD_TYPE }}
+        path: artifacts/windows/${{ matrix.arch }}
+        retention-days: 30
+
+  create-release-package:
+    needs: [build-android, build-ios, build-macos, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Create unified package
+      run: |
+        mkdir -p native-libs
+
+        # Organize artifacts by platform
+        for platform in android ios macos linux windows; do
+          if [ -d "artifacts" ]; then
+            find artifacts -name "*$platform*" -type d | while read dir; do
+              if [ -f "$dir/libllamafu_native.a" ] || [ -f "$dir/llamafu_native.lib" ]; then
+                # Extract architecture from directory name
+                arch=$(basename "$dir" | cut -d'-' -f2)
+                mkdir -p "native-libs/$platform/$arch"
+                cp "$dir"/* "native-libs/$platform/$arch/"
+              fi
+            done
+          fi
+        done
+
+        # Create version info
+        echo "# Llamafu Native Libraries" > native-libs/README.md
+        echo "Version: $(date +%Y.%m.%d)" >> native-libs/README.md
+        echo "Built from commit: ${{ github.sha }}" >> native-libs/README.md
+        echo "" >> native-libs/README.md
+        echo "## Platforms" >> native-libs/README.md
+        find native-libs -name "*.a" -o -name "*.lib" | sort >> native-libs/README.md
+
+    - name: Create release archive
+      run: |
+        tar -czf llamafu-native-libs-$(date +%Y.%m.%d).tar.gz -C native-libs .
+        zip -r llamafu-native-libs-$(date +%Y.%m.%d).zip native-libs/
+
+    - name: Upload unified package
+      uses: actions/upload-artifact@v4
+      with:
+        name: llamafu-native-libs-${{ env.BUILD_TYPE }}
+        path: |
+          *.tar.gz
+          *.zip
+        retention-days: 90

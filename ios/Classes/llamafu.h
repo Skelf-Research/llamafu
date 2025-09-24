@@ -44,7 +44,13 @@ typedef struct {
     const char* prompt;
     int max_tokens;
     float temperature;
-    // Add more parameters as needed
+    int top_k;                // Top-K sampling (0 = disabled)
+    float top_p;              // Top-P/nucleus sampling (1.0 = disabled)
+    float repeat_penalty;     // Repetition penalty (1.0 = disabled)
+    int repeat_last_n;        // Last n tokens for repetition penalty
+    uint32_t seed;            // Random seed for sampling
+    float min_p;              // Minimum P sampling (0.0 = disabled)
+    float typical_p;          // Typical P sampling (1.0 = disabled)
 } LlamafuInferParams;
 
 // Constrained generation parameters
@@ -111,8 +117,29 @@ void llamafu_lora_adapter_free(LlamafuLoraAdapter adapter);
 LlamafuError llamafu_grammar_sampler_init(Llamafu llamafu, const char* grammar_str, const char* grammar_root, LlamafuGrammarSampler* out_sampler);
 void llamafu_grammar_sampler_free(LlamafuGrammarSampler sampler);
 
+// Model information
+typedef struct {
+    int n_vocab;              // Vocabulary size
+    int n_ctx_train;          // Training context length
+    int n_embd;               // Embedding dimensions
+    int n_layer;              // Number of layers
+    const char* architecture; // Model architecture name
+} LlamafuModelInfo;
+
+// Token-level operations
+LlamafuError llamafu_tokenize(Llamafu llamafu, const char* text, int* tokens, int max_tokens, int* n_tokens);
+LlamafuError llamafu_detokenize(Llamafu llamafu, const int* tokens, int n_tokens, char** out_text);
+LlamafuError llamafu_get_logits(Llamafu llamafu, float** out_logits, int* n_logits);
+
+// Model introspection
+LlamafuError llamafu_get_model_info(Llamafu llamafu, LlamafuModelInfo* out_info);
+
+// Embeddings support
+LlamafuError llamafu_get_embeddings(Llamafu llamafu, const char* text, float** out_embeddings, int* n_embeddings);
+
 // Clean up resources
 void llamafu_free(Llamafu llamafu);
+void llamafu_free_string(char* str);
 
 #ifdef __cplusplus
 }

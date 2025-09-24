@@ -1,0 +1,434 @@
+name: Llamafu Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+env:
+  FLUTTER_VERSION: '3.16.0'
+  CMAKE_VERSION: '3.22.0'
+
+jobs:
+  # Static analysis and linting
+  analyze:
+    name: Code Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+
+    - name: Get dependencies
+      run: flutter pub get
+
+    - name: Verify formatting
+      run: dart format --output=none --set-exit-if-changed .
+
+    - name: Analyze project source
+      run: dart analyze --fatal-infos --fatal-warnings
+
+    - name: Check pub dependencies
+      run: dart pub deps
+
+  # Dart/Flutter unit tests
+  dart-tests:
+    name: Dart Tests
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        flutter-version: ['3.16.0', '3.19.0']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ matrix.flutter-version }}
+        cache: true
+
+    - name: Get dependencies
+      run: flutter pub get
+
+    - name: Run comprehensive Dart tests
+      run: |
+        flutter test test/llamafu_comprehensive_test.dart --coverage --reporter=expanded
+        flutter test test/integration/ --coverage --reporter=expanded
+        flutter test test/performance/ --coverage --reporter=expanded
+
+    - name: Generate coverage report
+      if: matrix.os == 'ubuntu-latest' && matrix.flutter-version == '3.16.0'
+      run: |
+        flutter pub global activate coverage
+        flutter pub global run coverage:format_coverage --lcov --in=coverage --out=coverage/lcov.info --packages=.dart_tool/package_config.json --report-on=lib
+
+    - name: Upload coverage to Codecov
+      if: matrix.os == 'ubuntu-latest' && matrix.flutter-version == '3.16.0'
+      uses: codecov/codecov-action@v3
+      with:
+        file: coverage/lcov.info
+        flags: dart-tests
+        name: dart-coverage
+
+  # Native C++ tests
+  cpp-tests:
+    name: C++ Tests
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        build-type: [Debug, Release]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup CMake
+      uses: jwlawson/actions-setup-cmake@v1.14
+      with:
+        cmake-version: ${{ env.CMAKE_VERSION }}
+
+    - name: Setup build tools (Ubuntu)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential pkg-config libgtest-dev libgmock-dev
+
+    - name: Setup build tools (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install googletest pkg-config
+
+    - name: Setup build tools (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        choco install googletest
+
+    - name: Configure CMake
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build-type }} -DBUILD_TESTING=ON
+
+    - name: Build native library
+      run: cmake --build build --config ${{ matrix.build-type }} --parallel
+
+    - name: Run C++ tests
+      working-directory: build
+      run: ctest --output-on-failure --parallel 4
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: cpp-test-results-${{ matrix.os }}-${{ matrix.build-type }}
+        path: build/Testing/
+
+  # Performance benchmarks
+  performance:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.event_name == 'schedule' || contains(github.event.head_commit.message, '[benchmark]')
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+
+    - name: Setup CMake
+      uses: jwlawson/actions-setup-cmake@v1.14
+      with:
+        cmake-version: ${{ env.CMAKE_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential pkg-config
+
+    - name: Get Flutter dependencies
+      run: flutter pub get
+
+    - name: Build native library (Release)
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Release
+        cmake --build build --config Release --parallel
+
+    - name: Run performance benchmarks
+      run: |
+        flutter test test/performance/llamafu_performance_test.dart --reporter=json > performance_results.json
+
+    - name: Process performance results
+      run: |
+        echo "## Performance Test Results" >> $GITHUB_STEP_SUMMARY
+        echo "Results from performance benchmark suite:" >> $GITHUB_STEP_SUMMARY
+        # Process JSON results and add to summary
+        python3 scripts/process_performance_results.py performance_results.json >> $GITHUB_STEP_SUMMARY
+
+    - name: Upload performance results
+      uses: actions/upload-artifact@v3
+      with:
+        name: performance-results
+        path: performance_results.json
+
+  # Security and vulnerability tests
+  security:
+    name: Security Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+
+    - name: Get dependencies
+      run: flutter pub get
+
+    - name: Run security audit
+      run: dart pub audit
+
+    - name: Check for hardcoded secrets
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+
+    - name: Run security-focused tests
+      run: |
+        flutter test test/llamafu_comprehensive_test.dart --name="Security"
+
+  # Memory leak detection
+  memory-tests:
+    name: Memory Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+
+    - name: Install Valgrind
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y valgrind build-essential pkg-config
+
+    - name: Get dependencies
+      run: flutter pub get
+
+    - name: Build native library with debug info
+      run: |
+        cmake -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS="-g -O0" -DCMAKE_CXX_FLAGS="-g -O0"
+        cmake --build build --config Debug
+
+    - name: Run memory leak tests
+      run: |
+        flutter test test/performance/llamafu_performance_test.dart --name="Memory"
+
+    - name: Run Valgrind memory check (if C++ tests available)
+      if: success()
+      run: |
+        if [ -f "build/test_llamafu_native" ]; then
+          valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all --error-exitcode=1 build/test_llamafu_native
+        fi
+
+  # Cross-platform compatibility
+  compatibility:
+    name: Platform Compatibility
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: macos
+          - os: windows-latest
+            platform: windows
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+
+    - name: Get dependencies
+      run: flutter pub get
+
+    - name: Run platform-specific tests
+      run: |
+        flutter test test/integration/ --name="Platform"
+
+    - name: Test library loading
+      run: |
+        flutter test test/llamafu_comprehensive_test.dart --name="Initialization"
+
+  # Documentation and examples
+  documentation:
+    name: Documentation Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+
+    - name: Get dependencies
+      run: flutter pub get
+
+    - name: Generate documentation
+      run: dart doc
+
+    - name: Check example app
+      run: |
+        cd example
+        flutter pub get
+        flutter analyze
+        flutter test
+
+    - name: Validate README examples
+      run: |
+        # Extract code blocks from README and validate syntax
+        python3 scripts/validate_readme_examples.py
+
+  # Integration with real models (optional, requires model files)
+  integration-real:
+    name: Real Model Integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.event_name == 'schedule' && vars.RUN_REAL_MODEL_TESTS == 'true'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Setup Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: ${{ env.FLUTTER_VERSION }}
+        cache: true
+
+    - name: Download test models
+      run: |
+        mkdir -p test_models
+        # Download small test models (if available)
+        # wget -O test_models/small_model.gguf ${{ secrets.TEST_MODEL_URL }}
+
+    - name: Run integration tests with real models
+      run: |
+        export TEST_MODEL_PATH="test_models/small_model.gguf"
+        flutter test test/integration/ --name="RealModel"
+
+  # Collect and report results
+  results:
+    name: Test Results
+    runs-on: ubuntu-latest
+    needs: [analyze, dart-tests, cpp-tests]
+    if: always()
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download test artifacts
+      uses: actions/download-artifact@v3
+
+    - name: Generate test report
+      run: |
+        echo "# Test Results Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ "${{ needs.analyze.result }}" == "success" ]; then
+          echo "✅ Code Analysis: PASSED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Code Analysis: FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        if [ "${{ needs.dart-tests.result }}" == "success" ]; then
+          echo "✅ Dart Tests: PASSED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Dart Tests: FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+
+        if [ "${{ needs.cpp-tests.result }}" == "success" ]; then
+          echo "✅ C++ Tests: PASSED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ C++ Tests: FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+
+    - name: Comment PR with results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const summary = process.env.GITHUB_STEP_SUMMARY;
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `## 🧪 Test Results\n\n${summary}`
+          });
