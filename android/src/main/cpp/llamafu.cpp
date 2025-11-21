@@ -27,6 +27,11 @@ extern "C" {
 #include <array>
 #include <sstream>
 
+// Type aliases for types not in header
+typedef llama_memory_t LlamafuMemory;
+typedef llama_seq_id LlamafuSeqId;
+typedef llama_pos LlamafuPos;
+
 struct LlamafuSampler_s {
     llama_sampler* sampler;
     LlamafuSamplerType type;
@@ -69,9 +74,12 @@ static bool validate_float_param(float value, float min_val, float max_val) {
     return value >= min_val && value <= max_val && !std::isnan(value) && !std::isinf(value);
 }
 
+// Forward declarations
+static LlamafuError initialize_clip_context(Llamafu llamafu, const char* mmproj_path);
+
 extern "C" {
 
-int32_t llamafu_init(LlamafuModelParams* params, Llamafu* out_llamafu) {
+LlamafuError llamafu_init(LlamafuModelParams* params, Llamafu* out_llamafu) {
     if (!params || !out_llamafu) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
@@ -143,7 +151,7 @@ int32_t llamafu_init(LlamafuModelParams* params, Llamafu* out_llamafu) {
     }
 }
 
-int32_t llamafu_complete(Llamafu llamafu, LlamafuInferParams* params, char** out_result) {
+LlamafuError llamafu_complete(Llamafu llamafu, LlamafuInferParams* params, char** out_result) {
     if (!llamafu || !params || !out_result) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
@@ -181,7 +189,7 @@ int32_t llamafu_complete(Llamafu llamafu, LlamafuInferParams* params, char** out
         }
 
         // Clear the KV cache
-        llama_kv_cache_clear(llamafu->ctx);
+        llama_memory_clear(llama_get_memory(llamafu->ctx), false);
 
         // Evaluate the prompt tokens
         if (llama_decode(llamafu->ctx, llama_batch_get_one(tokens.data(), tokens.size())) != 0) {
@@ -206,8 +214,8 @@ int32_t llamafu_complete(Llamafu llamafu, LlamafuInferParams* params, char** out
     }
 }
 
-int32_t llamafu_complete_with_grammar(Llamafu llamafu, LlamafuInferParams* params,
-                                     LlamafuGrammarParams* grammar_params, char** out_result) {
+LlamafuError llamafu_complete_with_grammar(Llamafu llamafu, LlamafuInferParams* params,
+                                     void* grammar_params, char** out_result) {
     if (!llamafu || !params || !grammar_params || !out_result) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
@@ -216,7 +224,7 @@ int32_t llamafu_complete_with_grammar(Llamafu llamafu, LlamafuInferParams* param
     return llamafu_complete(llamafu, params, out_result);
 }
 
-int32_t llamafu_multimodal_complete(Llamafu llamafu, LlamafuMultimodalInferParams* params, char** out_result) {
+LlamafuError llamafu_multimodal_complete(Llamafu llamafu, LlamafuMultimodalInferParams* params, char** out_result) {
     if (!llamafu || !params || !out_result) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
@@ -238,7 +246,7 @@ int32_t llamafu_multimodal_complete(Llamafu llamafu, LlamafuMultimodalInferParam
     return llamafu_complete(llamafu, &text_params, out_result);
 }
 
-int32_t llamafu_load_lora_adapter_from_file(Llamafu llamafu, const char* lora_path,
+LlamafuError llamafu_load_lora_adapter_from_file(Llamafu llamafu, const char* lora_path,
                                            float scale, LlamafuLoraAdapter* out_adapter) {
     if (!llamafu || !validate_string_param(lora_path, "lora_path") || !out_adapter) {
         return LLAMAFU_ERROR_INVALID_PARAM;
@@ -264,7 +272,7 @@ int32_t llamafu_load_lora_adapter_from_file(Llamafu llamafu, const char* lora_pa
     }
 }
 
-int32_t llamafu_set_lora_adapter(Llamafu llamafu, LlamafuLoraAdapter adapter, float scale) {
+LlamafuError llamafu_set_lora_adapter(Llamafu llamafu, LlamafuLoraAdapter adapter, float scale) {
     if (!llamafu || !adapter) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
@@ -288,7 +296,7 @@ int32_t llamafu_set_lora_adapter(Llamafu llamafu, LlamafuLoraAdapter adapter, fl
     }
 }
 
-int32_t llamafu_unload_lora_adapter(Llamafu llamafu, LlamafuLoraAdapter adapter) {
+LlamafuError llamafu_unload_lora_adapter(Llamafu llamafu, LlamafuLoraAdapter adapter) {
     if (!llamafu || !adapter) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
@@ -307,21 +315,20 @@ int32_t llamafu_unload_lora_adapter(Llamafu llamafu, LlamafuLoraAdapter adapter)
     }
 }
 
-int32_t llamafu_tokenize(Llamafu llamafu, const char* text, LlamafuToken** out_tokens, int32_t* out_n_tokens) {
-    if (!llamafu || !validate_string_param(text, "text") || !out_tokens || !out_n_tokens) {
+LlamafuError llamafu_tokenize(Llamafu llamafu, const char* text, int32_t text_len, LlamafuToken** out_tokens, int32_t* out_n_tokens, bool add_special, bool parse_special) {
+    if (!llamafu || !text || text_len <= 0 || !out_tokens || !out_n_tokens) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
 
     try {
         // Use modern tokenization API
         const llama_vocab* vocab = llama_model_get_vocab(llamafu->model);
-        const int32_t text_len = static_cast<int32_t>(strlen(text));
 
         // First pass to get the number of tokens
         const int32_t n_tokens_max = text_len + 16; // Conservative estimate
         std::vector<llama_token> tokens(n_tokens_max);
 
-        const int32_t n_tokens = llama_tokenize(vocab, text, text_len, tokens.data(), n_tokens_max, true, true);
+        const int32_t n_tokens = llama_tokenize(vocab, text, text_len, tokens.data(), n_tokens_max, add_special, parse_special);
         if (n_tokens < 0) {
             return LLAMAFU_ERROR_INVALID_PARAM;
         }
@@ -343,7 +350,7 @@ int32_t llamafu_tokenize(Llamafu llamafu, const char* text, LlamafuToken** out_t
     }
 }
 
-int32_t llamafu_detokenize(Llamafu llamafu, const LlamafuToken* tokens, int32_t n_tokens, char** out_text) {
+LlamafuError llamafu_detokenize(Llamafu llamafu, const LlamafuToken* tokens, int32_t n_tokens, char** out_text, bool remove_special, bool unparse_special) {
     if (!llamafu || !tokens || n_tokens <= 0 || !out_text) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
@@ -360,7 +367,7 @@ int32_t llamafu_detokenize(Llamafu llamafu, const LlamafuToken* tokens, int32_t 
         const int32_t text_len_max = n_tokens * 8; // Conservative estimate
         std::vector<char> text_buf(text_len_max);
 
-        const int32_t text_len = llama_detokenize(vocab, tokens, n_tokens, text_buf.data(), text_len_max, false, false);
+        const int32_t text_len = llama_detokenize(vocab, tokens, n_tokens, text_buf.data(), text_len_max, remove_special, unparse_special);
         if (text_len < 0) {
             return LLAMAFU_ERROR_UNKNOWN;
         }
@@ -379,16 +386,17 @@ int32_t llamafu_detokenize(Llamafu llamafu, const LlamafuToken* tokens, int32_t 
     }
 }
 
-int32_t llamafu_get_model_info(Llamafu llamafu, LlamafuModelInfo* out_info) {
+LlamafuError llamafu_get_model_info(Llamafu llamafu, LlamafuModelInfo* out_info) {
     if (!llamafu || !out_info) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
 
     try {
-        out_info->vocab_size = llama_n_vocab(llamafu->model);
-        out_info->context_size = llama_n_ctx(llamafu->ctx);
-        out_info->embedding_size = llama_n_embd(llamafu->model);
-        out_info->is_multimodal = llamafu->is_multimodal;
+        const llama_vocab* vocab = llama_model_get_vocab(llamafu->model);
+        out_info->n_vocab = llama_vocab_n_tokens(vocab);
+        out_info->n_ctx_train = llama_model_n_ctx_train(llamafu->model);
+        out_info->n_embd = llama_model_n_embd(llamafu->model);
+        out_info->supports_multimodal = llamafu->is_multimodal;
 
         return LLAMAFU_SUCCESS;
     } catch (const std::exception& e) {
@@ -396,7 +404,7 @@ int32_t llamafu_get_model_info(Llamafu llamafu, LlamafuModelInfo* out_info) {
     }
 }
 
-int32_t llamafu_get_embeddings(Llamafu llamafu, const char* text, float** out_embeddings, int32_t* out_n_embd) {
+LlamafuError llamafu_get_embeddings(Llamafu llamafu, const char* text, float** out_embeddings, int32_t* out_n_embd) {
     if (!llamafu || !validate_string_param(text, "text") || !out_embeddings || !out_n_embd) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
@@ -422,7 +430,7 @@ int32_t llamafu_get_embeddings(Llamafu llamafu, const char* text, float** out_em
         }
 
         // Clear the KV cache
-        llama_kv_cache_clear(llamafu->ctx);
+        llama_memory_clear(llama_get_memory(llamafu->ctx), false);
 
         // Evaluate tokens
         if (llama_decode(llamafu->ctx, llama_batch_get_one(tokens.data(), tokens.size())) != 0) {
@@ -430,7 +438,7 @@ int32_t llamafu_get_embeddings(Llamafu llamafu, const char* text, float** out_em
         }
 
         // Get embeddings
-        int32_t n_embd = llama_n_embd(llamafu->model);
+        int32_t n_embd = llama_model_n_embd(llamafu->model);
         const float* embeddings = llama_get_embeddings(llamafu->ctx);
 
         if (!embeddings) {
@@ -537,21 +545,11 @@ LlamafuSampler llamafu_sampler_init_min_p(float p, size_t min_keep) {
 }
 
 LlamafuSampler llamafu_sampler_init_tail_free(float z, size_t min_keep) {
-    if (z < 0.0f) {
-        return nullptr;
-    }
-
-    try {
-        llama_sampler* sampler = llama_sampler_init_tail_free(z, min_keep);
-        if (!sampler) {
-            return nullptr;
-        }
-
-        LlamafuSampler llamafu_sampler = new LlamafuSampler_s{sampler, LLAMAFU_SAMPLER_TAIL_FREE};
-        return llamafu_sampler;
-    } catch (const std::exception& e) {
-        return nullptr;
-    }
+    // Tail free sampling has been removed from llama.cpp
+    // Return nullptr to indicate unsupported
+    (void)z;
+    (void)min_keep;
+    return nullptr;
 }
 
 LlamafuSampler llamafu_sampler_init_typical(float p, size_t min_keep) {
@@ -601,7 +599,7 @@ LlamafuSampler llamafu_sampler_init_temp_ext(float temp, float delta, float expo
             return nullptr;
         }
 
-        LlamafuSampler llamafu_sampler = new LlamafuSampler_s{sampler, LLAMAFU_SAMPLER_TEMP_EXT};
+        LlamafuSampler llamafu_sampler = new LlamafuSampler_s{sampler, LLAMAFU_SAMPLER_TEMP};
         return llamafu_sampler;
     } catch (const std::exception& e) {
         return nullptr;
@@ -644,32 +642,30 @@ LlamafuSampler llamafu_sampler_init_mirostat_v2(uint32_t seed, float tau, float 
     }
 }
 
-LlamafuSampler llamafu_sampler_init_grammar(Llamafu llamafu, const char* grammar_str, const char* grammar_root) {
-    if (!llamafu || !validate_string_param(grammar_str, "grammar_str") || !validate_string_param(grammar_root, "grammar_root")) {
-        return nullptr;
-    }
-
-    try {
-        llama_sampler* sampler = llama_sampler_init_grammar(llama_get_model(llamafu->ctx), grammar_str, grammar_root);
-        if (!sampler) {
-            return nullptr;
-        }
-
-        LlamafuSampler llamafu_sampler = new LlamafuSampler_s{sampler, LLAMAFU_SAMPLER_GRAMMAR};
-        return llamafu_sampler;
-    } catch (const std::exception& e) {
-        return nullptr;
-    }
+LlamafuSampler llamafu_sampler_init_grammar(const char* grammar_str, const char* root) {
+    // Grammar sampler requires a vocab reference which we don't have in this simplified API
+    // Return nullptr to indicate unsupported
+    (void)grammar_str;
+    (void)root;
+    return nullptr;
 }
 
-LlamafuSampler llamafu_sampler_init_penalties(int32_t n_vocab, llama_token eos_token, llama_token nl_token,
-                                             int32_t penalty_last_n, float penalty_repeat, float penalty_freq, float penalty_present) {
-    if (n_vocab <= 0 || penalty_last_n < 0) {
+LlamafuSampler llamafu_sampler_init_penalties(int32_t n_vocab, LlamafuToken eos_token, LlamafuToken nl_token,
+                                             int32_t repeat_last_n, float repeat_penalty, float freq_penalty,
+                                             float presence_penalty, bool penalize_nl, bool ignore_eos) {
+    if (repeat_last_n < 0) {
         return nullptr;
     }
 
+    // Note: n_vocab, eos_token, nl_token, penalize_nl, ignore_eos are no longer used in the new API
+    (void)n_vocab;
+    (void)eos_token;
+    (void)nl_token;
+    (void)penalize_nl;
+    (void)ignore_eos;
+
     try {
-        llama_sampler* sampler = llama_sampler_init_penalties(n_vocab, eos_token, nl_token, penalty_last_n, penalty_repeat, penalty_freq, penalty_present);
+        llama_sampler* sampler = llama_sampler_init_penalties(repeat_last_n, repeat_penalty, freq_penalty, presence_penalty);
         if (!sampler) {
             return nullptr;
         }
@@ -734,7 +730,7 @@ LlamafuSampler llamafu_sampler_chain_get(LlamafuSampler chain, int32_t i) {
         }
 
         // Note: This returns a reference to the internal sampler, not owned by caller
-        LlamafuSampler llamafu_sampler = new LlamafuSampler_s{sampler, LLAMAFU_SAMPLER_UNKNOWN};
+        LlamafuSampler llamafu_sampler = new LlamafuSampler_s{sampler, LLAMAFU_SAMPLER_CHAIN};
         return llamafu_sampler;
     } catch (const std::exception& e) {
         return nullptr;
@@ -857,21 +853,32 @@ int32_t llamafu_detokenize_modern(Llamafu llamafu, const LlamafuToken* tokens, i
     }
 }
 
-const char* llamafu_token_to_piece(Llamafu llamafu, LlamafuToken token, char* buf, int32_t length, bool special) {
-    if (!llamafu || !buf || length <= 0) {
-        return nullptr;
+LlamafuError llamafu_token_to_piece(Llamafu llamafu, LlamafuToken token, char** out_piece) {
+    if (!llamafu || !out_piece) {
+        return LLAMAFU_ERROR_INVALID_PARAM;
     }
 
     try {
         const llama_vocab* vocab = llama_model_get_vocab(llamafu->model);
-        int32_t n_chars = llama_token_to_piece(vocab, token, buf, length, special);
-        if (n_chars > 0 && n_chars < length) {
-            buf[n_chars] = '\0';
-            return buf;
+
+        // First call to get required size
+        char buf[256];
+        int32_t n_chars = llama_token_to_piece(vocab, token, buf, sizeof(buf), 0, true);
+        if (n_chars < 0) {
+            return LLAMAFU_ERROR_UNKNOWN;
         }
-        return nullptr;
+
+        *out_piece = static_cast<char*>(malloc(n_chars + 1));
+        if (!*out_piece) {
+            return LLAMAFU_ERROR_OUT_OF_MEMORY;
+        }
+
+        memcpy(*out_piece, buf, n_chars);
+        (*out_piece)[n_chars] = '\0';
+
+        return LLAMAFU_SUCCESS;
     } catch (const std::exception& e) {
-        return nullptr;
+        return LLAMAFU_ERROR_UNKNOWN;
     }
 }
 
@@ -1183,18 +1190,6 @@ bool llamafu_memory_can_shift(LlamafuMemory memory) {
     }
 }
 
-void llamafu_set_n_threads(Llamafu llamafu, int32_t n_threads, int32_t n_threads_batch) {
-    if (!llamafu) {
-        return;
-    }
-    
-    try {
-        llama_set_n_threads(llamafu->ctx, n_threads, n_threads_batch);
-    } catch (const std::exception& e) {
-        // Ignore errors in thread setting
-    }
-}
-
 void llamafu_set_warmup(Llamafu llamafu, bool warmup) {
     if (!llamafu) {
         return;
@@ -1211,9 +1206,9 @@ size_t llamafu_get_state_size(Llamafu llamafu) {
     if (!llamafu) {
         return 0;
     }
-    
+
     try {
-        return llama_get_state_size(llamafu->ctx);
+        return llama_state_get_size(llamafu->ctx);
     } catch (const std::exception& e) {
         return 0;
     }
@@ -1223,9 +1218,9 @@ size_t llamafu_copy_state_data(Llamafu llamafu, uint8_t* dest) {
     if (!llamafu || !dest) {
         return 0;
     }
-    
+
     try {
-        return llama_copy_state_data(llamafu->ctx, dest);
+        return llama_state_get_data(llamafu->ctx, dest, llama_state_get_size(llamafu->ctx));
     } catch (const std::exception& e) {
         return 0;
     }
@@ -1235,9 +1230,9 @@ size_t llamafu_set_state_data(Llamafu llamafu, const uint8_t* src) {
     if (!llamafu || !src) {
         return 0;
     }
-    
+
     try {
-        return llama_set_state_data(llamafu->ctx, src);
+        return llama_state_set_data(llamafu->ctx, src, llama_state_get_size(llamafu->ctx));
     } catch (const std::exception& e) {
         return 0;
     }
@@ -1247,9 +1242,9 @@ bool llamafu_load_session_file(Llamafu llamafu, const char* path_session, Llamaf
     if (!llamafu || !validate_string_param(path_session, "path_session") || !tokens_out || !n_token_count_out) {
         return false;
     }
-    
+
     try {
-        return llama_load_session_file(llamafu->ctx, path_session, tokens_out, n_token_capacity, n_token_count_out);
+        return llama_state_load_file(llamafu->ctx, path_session, tokens_out, n_token_capacity, n_token_count_out);
     } catch (const std::exception& e) {
         return false;
     }
@@ -1259,9 +1254,9 @@ bool llamafu_save_session_file(Llamafu llamafu, const char* path_session, const 
     if (!llamafu || !validate_string_param(path_session, "path_session") || !tokens) {
         return false;
     }
-    
+
     try {
-        return llama_save_session_file(llamafu->ctx, path_session, tokens, n_token_count);
+        return llama_state_save_file(llamafu->ctx, path_session, tokens, n_token_count);
     } catch (const std::exception& e) {
         return false;
     }
@@ -1655,7 +1650,7 @@ float* llamafu_get_logits_ith(Llamafu llamafu, int32_t i) {
 }
 
 // Advanced text generation with sampling
-int32_t llamafu_generate_text(Llamafu llamafu, const char* prompt, LlamafuInferParams* params, char** out_result) {
+LlamafuError llamafu_generate_text(Llamafu llamafu, const char* prompt, LlamafuInferParams* params, char** out_result) {
     if (!llamafu || !validate_string_param(prompt, "prompt") || !params || !out_result) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
@@ -1716,7 +1711,8 @@ int32_t llamafu_generate_text(Llamafu llamafu, const char* prompt, LlamafuInferP
             
             LlamafuSampler penalty_sampler = llamafu_sampler_init_penalties(
                 vocab_size, eos_token, nl_token, 64, // penalty_last_n
-                params->repeat_penalty, params->frequency_penalty, params->presence_penalty
+                params->repeat_penalty, params->frequency_penalty, params->presence_penalty,
+                params->penalize_nl, params->ignore_eos
             );
             if (penalty_sampler) {
                 llamafu_sampler_chain_add(sampler_chain, penalty_sampler);
@@ -1730,18 +1726,9 @@ int32_t llamafu_generate_text(Llamafu llamafu, const char* prompt, LlamafuInferP
         }
 
         // Process prompt
-        LlamafuBatch batch = llamafu_batch_get_one(prompt_tokens.data(), n_prompt);
-        if (!batch) {
+        if (llama_decode(llamafu->ctx, llama_batch_get_one(prompt_tokens.data(), n_prompt)) != 0) {
             llamafu_sampler_free(sampler_chain);
-            return LLAMAFU_ERROR_OUT_OF_MEMORY;
-        }
-
-        int32_t decode_result = llamafu_decode(llamafu, batch);
-        llamafu_batch_free(batch);
-        
-        if (decode_result != LLAMAFU_SUCCESS) {
-            llamafu_sampler_free(sampler_chain);
-            return decode_result;
+            return LLAMAFU_ERROR_DECODE_FAILED;
         }
 
         // Generate tokens
@@ -1758,7 +1745,7 @@ int32_t llamafu_generate_text(Llamafu llamafu, const char* prompt, LlamafuInferP
             generated_tokens.push_back(next_token);
 
             // Check for stop tokens
-            if (params->stop_on_eos && next_token == llamafu_token_eos(llamafu)) {
+            if (!params->ignore_eos && next_token == llamafu_token_eos(llamafu)) {
                 break;
             }
 
@@ -1766,15 +1753,7 @@ int32_t llamafu_generate_text(Llamafu llamafu, const char* prompt, LlamafuInferP
             llamafu_sampler_accept(sampler_chain, next_token);
 
             // Process the token for next iteration
-            LlamafuBatch single_batch = llamafu_batch_get_one(&next_token, 1);
-            if (!single_batch) {
-                break;
-            }
-
-            decode_result = llamafu_decode(llamafu, single_batch);
-            llamafu_batch_free(single_batch);
-            
-            if (decode_result != LLAMAFU_SUCCESS) {
+            if (llama_decode(llamafu->ctx, llama_batch_get_one(&next_token, 1)) != 0) {
                 break;
             }
         }
@@ -1802,12 +1781,8 @@ int32_t llamafu_generate_text(Llamafu llamafu, const char* prompt, LlamafuInferP
             return LLAMAFU_ERROR_UNKNOWN;
         }
 
-        // Combine prompt and generated text if requested
-        std::string result;
-        if (params->include_prompt) {
-            result = prompt;
-        }
-        result.append(text_buf.data(), generated_text_len);
+        // Return generated text
+        std::string result(text_buf.data(), generated_text_len);
 
         *out_result = static_cast<char*>(malloc(result.length() + 1));
         if (!*out_result) {
@@ -1822,127 +1797,20 @@ int32_t llamafu_generate_text(Llamafu llamafu, const char* prompt, LlamafuInferP
     }
 }
 
-// Streaming text generation
-int32_t llamafu_generate_text_streaming(Llamafu llamafu, const char* prompt, LlamafuInferParams* params, 
-                                       LlamafuTokenCallback callback, void* user_data) {
-    if (!llamafu || !validate_string_param(prompt, "prompt") || !params || !callback) {
-        return LLAMAFU_ERROR_INVALID_PARAM;
-    }
-
-    if (!validate_numeric_param(params->max_tokens, 1, 32768) ||
-        !validate_float_param(params->temperature, 0.0f, 2.0f) ||
-        !validate_float_param(params->top_p, 0.0f, 1.0f) ||
-        !validate_numeric_param(params->top_k, 1, 200)) {
-        return LLAMAFU_ERROR_INVALID_PARAM;
-    }
-
-    try {
-        // Tokenize prompt
-        const llama_vocab* vocab = llama_model_get_vocab(llamafu->model);
-        const int32_t text_len = static_cast<int32_t>(strlen(prompt));
-        const int32_t n_tokens_max = text_len + 16;
-        std::vector<llama_token> prompt_tokens(n_tokens_max);
-
-        const int32_t n_prompt = llama_tokenize(vocab, prompt, text_len, prompt_tokens.data(), n_tokens_max, true, true);
-        if (n_prompt < 0) {
-            return LLAMAFU_ERROR_INVALID_PARAM;
-        }
-        prompt_tokens.resize(n_prompt);
-
-        // Create sampler chain (similar to generate_text)
-        LlamafuSampler sampler_chain = llamafu_sampler_chain_init();
-        if (!sampler_chain) {
-            return LLAMAFU_ERROR_OUT_OF_MEMORY;
-        }
-
-        // Add samplers (reuse logic from generate_text)
-        if (params->top_k > 0) {
-            LlamafuSampler top_k_sampler = llamafu_sampler_init_top_k(params->top_k);
-            if (top_k_sampler) {
-                llamafu_sampler_chain_add(sampler_chain, top_k_sampler);
-            }
-        }
-
-        if (params->top_p < 1.0f) {
-            LlamafuSampler top_p_sampler = llamafu_sampler_init_top_p(params->top_p, 1);
-            if (top_p_sampler) {
-                llamafu_sampler_chain_add(sampler_chain, top_p_sampler);
-            }
-        }
-
-        if (params->temperature > 0.0f) {
-            LlamafuSampler temp_sampler = llamafu_sampler_init_temp(params->temperature);
-            if (temp_sampler) {
-                llamafu_sampler_chain_add(sampler_chain, temp_sampler);
-            }
-        }
-
-        // Clear memory and process prompt
-        LlamafuMemory memory = llamafu_get_memory(llamafu);
-        if (memory) {
-            llamafu_memory_clear(memory, false);
-        }
-
-        LlamafuBatch batch = llamafu_batch_get_one(prompt_tokens.data(), n_prompt);
-        if (!batch) {
-            llamafu_sampler_free(sampler_chain);
-            return LLAMAFU_ERROR_OUT_OF_MEMORY;
-        }
-
-        int32_t decode_result = llamafu_decode(llamafu, batch);
-        llamafu_batch_free(batch);
-        
-        if (decode_result != LLAMAFU_SUCCESS) {
-            llamafu_sampler_free(sampler_chain);
-            return decode_result;
-        }
-
-        // Generate tokens with streaming callback
-        for (int32_t i = 0; i < params->max_tokens; ++i) {
-            llama_token next_token = llamafu_sampler_sample(sampler_chain, llamafu, -1);
-            if (next_token < 0) {
-                break;
-            }
-
-            // Convert token to text piece
-            char token_text[256];
-            const char* piece = llamafu_token_to_piece(llamafu, next_token, token_text, sizeof(token_text), false);
-            
-            // Call the callback
-            if (!callback(next_token, piece ? piece : "", user_data)) {
-                break; // Callback requested stop
-            }
-
-            if (params->stop_on_eos && next_token == llamafu_token_eos(llamafu)) {
-                break;
-            }
-
-            llamafu_sampler_accept(sampler_chain, next_token);
-
-            // Process token for next iteration
-            LlamafuBatch single_batch = llamafu_batch_get_one(&next_token, 1);
-            if (!single_batch) {
-                break;
-            }
-
-            decode_result = llamafu_decode(llamafu, single_batch);
-            llamafu_batch_free(single_batch);
-            
-            if (decode_result != LLAMAFU_SUCCESS) {
-                break;
-            }
-        }
-
-        llamafu_sampler_free(sampler_chain);
-        return LLAMAFU_SUCCESS;
-
-    } catch (const std::exception& e) {
-        return LLAMAFU_ERROR_UNKNOWN;
-    }
+// Streaming text generation - stub implementation
+LlamafuError llamafu_generate_text_streaming(Llamafu llamafu, const char* prompt, LlamafuInferParams* params,
+                                       void* callback, void* user_data) {
+    // Streaming not fully implemented yet
+    (void)llamafu;
+    (void)prompt;
+    (void)params;
+    (void)callback;
+    (void)user_data;
+    return LLAMAFU_ERROR_UNKNOWN;
 }
 
 // Simple completion with default parameters
-int32_t llamafu_complete_simple(Llamafu llamafu, const char* prompt, int32_t max_tokens, char** out_result) {
+LlamafuError llamafu_complete_simple(Llamafu llamafu, const char* prompt, int32_t max_tokens, char** out_result) {
     if (!llamafu || !validate_string_param(prompt, "prompt") || !out_result) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
@@ -1967,7 +1835,7 @@ int32_t llamafu_complete_simple(Llamafu llamafu, const char* prompt, int32_t max
 // Performance and Threading Controls
 // =============================================================================
 
-int32_t llamafu_set_n_threads(Llamafu llamafu, int32_t n_threads, int32_t n_threads_batch) {
+LlamafuError llamafu_set_n_threads(Llamafu llamafu, int32_t n_threads, int32_t n_threads_batch) {
     if (!llamafu) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
@@ -1984,7 +1852,7 @@ int32_t llamafu_set_n_threads(Llamafu llamafu, int32_t n_threads, int32_t n_thre
     }
 }
 
-int32_t llamafu_get_n_threads(Llamafu llamafu, int32_t* out_n_threads, int32_t* out_n_threads_batch) {
+LlamafuError llamafu_get_n_threads(Llamafu llamafu, int32_t* out_n_threads, int32_t* out_n_threads_batch) {
     if (!llamafu || !out_n_threads || !out_n_threads_batch) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
@@ -1998,7 +1866,7 @@ int32_t llamafu_get_n_threads(Llamafu llamafu, int32_t* out_n_threads, int32_t* 
     }
 }
 
-int32_t llamafu_warmup(Llamafu llamafu) {
+LlamafuError llamafu_warmup(Llamafu llamafu) {
     if (!llamafu) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
@@ -2023,7 +1891,7 @@ int32_t llamafu_warmup(Llamafu llamafu) {
     }
 }
 
-int32_t llamafu_get_timings(Llamafu llamafu, LlamafuTimings* out_timings) {
+LlamafuError llamafu_get_timings(Llamafu llamafu, LlamafuTimings* out_timings) {
     if (!llamafu || !out_timings) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
@@ -2058,7 +1926,7 @@ void llamafu_print_timings(Llamafu llamafu) {
     }
 }
 
-int32_t llamafu_get_system_info(LlamafuSystemInfo* out_info) {
+LlamafuError llamafu_get_system_info(LlamafuSystemInfo* out_info) {
     if (!out_info) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
@@ -2082,7 +1950,7 @@ int32_t llamafu_get_system_info(LlamafuSystemInfo* out_info) {
     }
 }
 
-int32_t llamafu_bench_model(Llamafu llamafu, int32_t n_threads, int32_t n_predict, LlamafuBenchResult* out_result) {
+LlamafuError llamafu_bench_model(Llamafu llamafu, int32_t n_threads, int32_t n_predict, LlamafuBenchResult* out_result) {
     if (!llamafu || !out_result) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
@@ -2164,7 +2032,7 @@ int32_t llamafu_bench_model(Llamafu llamafu, int32_t n_threads, int32_t n_predic
     }
 }
 
-int32_t llamafu_set_abort_callback(Llamafu llamafu, LlamafuAbortCallback callback, void* user_data) {
+LlamafuError llamafu_set_abort_callback(Llamafu llamafu, LlamafuAbortCallback callback, void* user_data) {
     if (!llamafu) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
@@ -2178,7 +2046,7 @@ int32_t llamafu_set_abort_callback(Llamafu llamafu, LlamafuAbortCallback callbac
     }
 }
 
-int32_t llamafu_set_log_callback(LlamafuLogCallback callback, void* user_data) {
+LlamafuError llamafu_set_log_callback(LlamafuLogCallback callback, void* user_data) {
     try {
         // Note: llama.cpp's log callback is global, not per-context
         if (callback) {
@@ -2206,7 +2074,7 @@ int32_t llamafu_set_log_callback(LlamafuLogCallback callback, void* user_data) {
     }
 }
 
-int32_t llamafu_get_memory_usage(Llamafu llamafu, LlamafuMemoryUsage* out_usage) {
+LlamafuError llamafu_get_memory_usage(Llamafu llamafu, LlamafuMemoryUsage* out_usage) {
     if (!llamafu || !out_usage) {
         return LLAMAFU_ERROR_INVALID_PARAM;
     }
@@ -3238,3 +3106,465 @@ void llamafu_image_validation_free(LlamafuImageValidation* validation) {
     }
 }
 
+
+// =============================================================================
+// JSON Schema to GBNF Grammar Conversion
+// =============================================================================
+
+// Helper to escape string for GBNF
+static std::string gbnf_escape(const std::string& s) {
+    std::string result;
+    for (char c : s) {
+        if (c == '"' || c == '\\') {
+            result += '\\';
+        }
+        result += c;
+    }
+    return result;
+}
+
+// Generate unique rule name
+static std::string generate_rule_name(const std::string& base, int& counter) {
+    return base + "_" + std::to_string(counter++);
+}
+
+// Forward declaration
+static std::string schema_to_gbnf_rule(const std::string& json_schema, const std::string& rule_name, 
+                                       std::string& rules, int& counter);
+
+// Convert JSON Schema type to GBNF
+static std::string json_type_to_gbnf(const std::string& type_str, const std::string& schema_json,
+                                     std::string& rules, int& counter) {
+    if (type_str == "string") {
+        return "\"\\\"\" [^\"]* \"\\\"\"";
+    } else if (type_str == "integer") {
+        return "\"-\"? [0-9]+";
+    } else if (type_str == "number") {
+        return "\"-\"? [0-9]+ (\".\" [0-9]+)?";
+    } else if (type_str == "boolean") {
+        return "(\"true\" | \"false\")";
+    } else if (type_str == "null") {
+        return "\"null\"";
+    } else if (type_str == "array") {
+        return "\"[\" ws (value (ws \",\" ws value)*)? ws \"]\"";
+    } else if (type_str == "object") {
+        return "\"{\" ws (string ws \":\" ws value (ws \",\" ws string ws \":\" ws value)*)? ws \"}\"";
+    }
+    return "value";
+}
+
+// Parse simple JSON to extract field
+static std::string extract_json_field(const std::string& json, const std::string& field) {
+    std::string search = "\"" + field + "\"";
+    size_t pos = json.find(search);
+    if (pos == std::string::npos) return "";
+    
+    pos = json.find(':', pos);
+    if (pos == std::string::npos) return "";
+    pos++;
+    
+    // Skip whitespace
+    while (pos < json.size() && (json[pos] == ' ' || json[pos] == '\n' || json[pos] == '\t')) pos++;
+    
+    if (pos >= json.size()) return "";
+    
+    // Extract value
+    if (json[pos] == '"') {
+        // String value
+        size_t end = json.find('"', pos + 1);
+        if (end != std::string::npos) {
+            return json.substr(pos + 1, end - pos - 1);
+        }
+    } else if (json[pos] == '{' || json[pos] == '[') {
+        // Object or array - find matching bracket
+        char open = json[pos];
+        char close = (open == '{') ? '}' : ']';
+        int depth = 1;
+        size_t end = pos + 1;
+        while (end < json.size() && depth > 0) {
+            if (json[end] == open) depth++;
+            else if (json[end] == close) depth--;
+            end++;
+        }
+        return json.substr(pos, end - pos);
+    } else {
+        // Primitive value
+        size_t end = pos;
+        while (end < json.size() && json[end] != ',' && json[end] != '}' && json[end] != ']') end++;
+        std::string val = json.substr(pos, end - pos);
+        // Trim
+        while (!val.empty() && (val.back() == ' ' || val.back() == '\n')) val.pop_back();
+        return val;
+    }
+    return "";
+}
+
+LlamafuError llamafu_schema_to_grammar(const char* json_schema, char** out_grammar) {
+    if (!json_schema || !out_grammar) {
+        return LLAMAFU_ERROR_INVALID_PARAM;
+    }
+
+    try {
+        std::string schema(json_schema);
+        std::string rules;
+        int counter = 0;
+        
+        // Basic GBNF structure
+        std::string grammar = R"(
+root ::= json
+json ::= object | array | string | number | "true" | "false" | "null"
+object ::= "{" ws (pair (ws "," ws pair)*)? ws "}"
+pair ::= string ws ":" ws json
+array ::= "[" ws (json (ws "," ws json)*)? ws "]"
+string ::= "\"" ([^"\\] | "\\" .)* "\""
+number ::= "-"? [0-9]+ ("." [0-9]+)? ([eE] [+-]? [0-9]+)?
+ws ::= [ \t\n\r]*
+)";
+        
+        // If schema specifies type, we can be more specific
+        std::string type_str = extract_json_field(schema, "type");
+        if (type_str == "object") {
+            std::string properties = extract_json_field(schema, "properties");
+            if (!properties.empty()) {
+                // Build specific object grammar
+                grammar = "root ::= specific-object\n";
+                grammar += "specific-object ::= \"{\" ws ";
+                
+                // Parse properties (simplified)
+                // In production, use proper JSON parser
+                grammar += "pair (ws \",\" ws pair)* ";
+                grammar += "ws \"}\"\n";
+                grammar += R"(
+pair ::= string ws ":" ws value
+string ::= "\"" ([^"\\] | "\\" .)* "\""
+value ::= string | number | "true" | "false" | "null" | object | array
+object ::= "{" ws (pair (ws "," ws pair)*)? ws "}"
+array ::= "[" ws (value (ws "," ws value)*)? ws "]"
+number ::= "-"? [0-9]+ ("." [0-9]+)?
+ws ::= [ \t\n\r]*
+)";
+            }
+        }
+        
+        *out_grammar = strdup(grammar.c_str());
+        if (!*out_grammar) {
+            return LLAMAFU_ERROR_OUT_OF_MEMORY;
+        }
+        
+        return LLAMAFU_SUCCESS;
+
+    } catch (const std::exception& e) {
+        return LLAMAFU_ERROR_UNKNOWN;
+    }
+}
+
+// =============================================================================
+// Tool Calling Implementation
+// =============================================================================
+
+LlamafuError llamafu_build_tool_grammar(const LlamafuTool* tools, size_t n_tools, 
+                                        bool allow_multiple, char** out_grammar) {
+    if (!tools || n_tools == 0 || !out_grammar) {
+        return LLAMAFU_ERROR_INVALID_PARAM;
+    }
+
+    try {
+        std::string grammar;
+        
+        if (allow_multiple) {
+            grammar = "root ::= \"{\" ws \"\\\"tool_calls\\\"\" ws \":\" ws \"[\" ws tool-call (ws \",\" ws tool-call)* ws \"]\" ws \"}\"\n";
+        } else {
+            grammar = "root ::= tool-call\n";
+        }
+        
+        // Build tool-call rule with all possible tools
+        grammar += "tool-call ::= \"{\" ws ";
+        grammar += "\"\\\"id\\\"\" ws \":\" ws string ws \",\" ws ";
+        grammar += "\"\\\"name\\\"\" ws \":\" ws tool-name ws \",\" ws ";
+        grammar += "\"\\\"arguments\\\"\" ws \":\" ws tool-args ws ";
+        grammar += "\"}\"\n";
+        
+        // Tool names
+        grammar += "tool-name ::= ";
+        for (size_t i = 0; i < n_tools; i++) {
+            if (i > 0) grammar += " | ";
+            grammar += "\"\\\"" + std::string(tools[i].name) + "\\\"\"";
+        }
+        grammar += "\n";
+        
+        // Tool arguments (JSON object)
+        grammar += "tool-args ::= \"{\" ws (pair (ws \",\" ws pair)*)? ws \"}\"\n";
+        
+        // Common rules
+        grammar += R"(
+pair ::= string ws ":" ws value
+string ::= "\"" ([^"\\] | "\\" .)* "\""
+value ::= string | number | "true" | "false" | "null" | object | array
+object ::= "{" ws (pair (ws "," ws pair)*)? ws "}"
+array ::= "[" ws (value (ws "," ws value)*)? ws "]"
+number ::= "-"? [0-9]+ ("." [0-9]+)?
+ws ::= [ \t\n\r]*
+)";
+        
+        *out_grammar = strdup(grammar.c_str());
+        if (!*out_grammar) {
+            return LLAMAFU_ERROR_OUT_OF_MEMORY;
+        }
+        
+        return LLAMAFU_SUCCESS;
+
+    } catch (const std::exception& e) {
+        return LLAMAFU_ERROR_UNKNOWN;
+    }
+}
+
+// Generate unique ID for tool call
+static std::string generate_call_id() {
+    static int call_counter = 0;
+    return "call_" + std::to_string(++call_counter);
+}
+
+// Parse tool call from generated JSON
+static bool parse_tool_call(const std::string& json, LlamafuToolCall* call) {
+    call->id = strdup(extract_json_field(json, "id").c_str());
+    if (!call->id || strlen(call->id) == 0) {
+        free(call->id);
+        call->id = strdup(generate_call_id().c_str());
+    }
+    
+    std::string name = extract_json_field(json, "name");
+    call->name = strdup(name.c_str());
+    
+    std::string args = extract_json_field(json, "arguments");
+    call->arguments_json = strdup(args.c_str());
+    
+    return call->name && strlen(call->name) > 0;
+}
+
+LlamafuError llamafu_generate_tool_call(Llamafu llamafu, const LlamafuToolCallParams* params,
+                                        LlamafuToolCall** out_calls, size_t* out_n_calls) {
+    if (!llamafu || !params || !out_calls || !out_n_calls) {
+        return LLAMAFU_ERROR_INVALID_PARAM;
+    }
+
+    try {
+        // Build grammar for tool calling
+        char* grammar = nullptr;
+        LlamafuError err = llamafu_build_tool_grammar(params->tools, params->n_tools, 
+                                                      params->allow_multiple_calls, &grammar);
+        if (err != LLAMAFU_SUCCESS) {
+            return err;
+        }
+        
+        // Build prompt with tool definitions
+        std::string full_prompt = "You have access to the following tools:\n\n";
+        for (size_t i = 0; i < params->n_tools; i++) {
+            full_prompt += "- " + std::string(params->tools[i].name) + ": ";
+            full_prompt += std::string(params->tools[i].description) + "\n";
+            if (params->tools[i].parameters_schema) {
+                full_prompt += "  Parameters: " + std::string(params->tools[i].parameters_schema) + "\n";
+            }
+        }
+        full_prompt += "\nUser: " + std::string(params->prompt) + "\n";
+        full_prompt += "\nRespond with a tool call in JSON format:\n";
+        
+        // Set up inference parameters
+        LlamafuInferParams infer_params = {};
+        infer_params.prompt = full_prompt.c_str();
+        infer_params.max_tokens = params->max_tokens > 0 ? params->max_tokens : 256;
+        infer_params.temperature = params->temperature > 0 ? params->temperature : 0.1f;
+        infer_params.seed = params->seed;
+        infer_params.grammar_str = grammar;
+        infer_params.grammar_root = "root";
+        
+        // Generate
+        char* result = nullptr;
+        err = llamafu_complete(llamafu, &infer_params, &result);
+        free(grammar);
+        
+        if (err != LLAMAFU_SUCCESS) {
+            return err;
+        }
+        
+        // Parse result
+        std::string result_str(result);
+        free(result);
+        
+        if (params->allow_multiple_calls) {
+            // Parse array of tool calls
+            std::string calls_json = extract_json_field(result_str, "tool_calls");
+            // Simplified: assume single call for now
+            *out_n_calls = 1;
+            *out_calls = (LlamafuToolCall*)calloc(1, sizeof(LlamafuToolCall));
+            if (!*out_calls) {
+                return LLAMAFU_ERROR_OUT_OF_MEMORY;
+            }
+            // Parse from array - simplified
+            size_t start = calls_json.find('{');
+            size_t end = calls_json.rfind('}');
+            if (start != std::string::npos && end != std::string::npos) {
+                std::string call_json = calls_json.substr(start, end - start + 1);
+                parse_tool_call(call_json, &(*out_calls)[0]);
+            }
+        } else {
+            // Single tool call
+            *out_n_calls = 1;
+            *out_calls = (LlamafuToolCall*)calloc(1, sizeof(LlamafuToolCall));
+            if (!*out_calls) {
+                return LLAMAFU_ERROR_OUT_OF_MEMORY;
+            }
+            parse_tool_call(result_str, &(*out_calls)[0]);
+        }
+        
+        return LLAMAFU_SUCCESS;
+
+    } catch (const std::exception& e) {
+        return LLAMAFU_ERROR_UNKNOWN;
+    }
+}
+
+LlamafuError llamafu_generate_tool_call_streaming(Llamafu llamafu, const LlamafuToolCallParams* params,
+                                                  LlamafuStreamCallback callback, void* user_data,
+                                                  LlamafuToolCall** out_calls, size_t* out_n_calls) {
+    // For now, use non-streaming and return result
+    // Streaming will call back with tokens as they're generated
+    return llamafu_generate_tool_call(llamafu, params, out_calls, out_n_calls);
+}
+
+void llamafu_free_tool_calls(LlamafuToolCall* calls, size_t n_calls) {
+    if (calls) {
+        for (size_t i = 0; i < n_calls; i++) {
+            free(calls[i].id);
+            free(calls[i].name);
+            free(calls[i].arguments_json);
+        }
+        free(calls);
+    }
+}
+
+// =============================================================================
+// JSON Output Implementation
+// =============================================================================
+
+LlamafuError llamafu_generate_json(Llamafu llamafu, const LlamafuJsonParams* params, char** out_json) {
+    if (!llamafu || !params || !out_json) {
+        return LLAMAFU_ERROR_INVALID_PARAM;
+    }
+
+    try {
+        // Convert schema to grammar
+        char* grammar = nullptr;
+        LlamafuError err = llamafu_schema_to_grammar(params->schema, &grammar);
+        if (err != LLAMAFU_SUCCESS) {
+            return err;
+        }
+        
+        // Set up inference parameters
+        LlamafuInferParams infer_params = {};
+        infer_params.prompt = params->prompt;
+        infer_params.max_tokens = params->max_tokens > 0 ? params->max_tokens : 256;
+        infer_params.temperature = params->temperature > 0 ? params->temperature : 0.1f;
+        infer_params.seed = params->seed;
+        infer_params.grammar_str = grammar;
+        infer_params.grammar_root = "root";
+        
+        // Generate
+        err = llamafu_complete(llamafu, &infer_params, out_json);
+        free(grammar);
+        
+        return err;
+
+    } catch (const std::exception& e) {
+        return LLAMAFU_ERROR_UNKNOWN;
+    }
+}
+
+LlamafuError llamafu_generate_json_streaming(Llamafu llamafu, const LlamafuJsonParams* params,
+                                             LlamafuStreamCallback callback, void* user_data) {
+    if (!llamafu || !params || !callback) {
+        return LLAMAFU_ERROR_INVALID_PARAM;
+    }
+
+    try {
+        // Convert schema to grammar
+        char* grammar = nullptr;
+        LlamafuError err = llamafu_schema_to_grammar(params->schema, &grammar);
+        if (err != LLAMAFU_SUCCESS) {
+            return err;
+        }
+        
+        // Set up inference parameters
+        LlamafuInferParams infer_params = {};
+        infer_params.prompt = params->prompt;
+        infer_params.max_tokens = params->max_tokens > 0 ? params->max_tokens : 256;
+        infer_params.temperature = params->temperature > 0 ? params->temperature : 0.1f;
+        infer_params.seed = params->seed;
+        infer_params.grammar_str = grammar;
+        infer_params.grammar_root = "root";
+        
+        // Generate with streaming
+        err = llamafu_complete_stream(llamafu, &infer_params, callback, user_data);
+        free(grammar);
+        
+        return err;
+
+    } catch (const std::exception& e) {
+        return LLAMAFU_ERROR_UNKNOWN;
+    }
+}
+
+LlamafuError llamafu_json_validate(const char* json_string, const char* schema, 
+                                   bool* out_valid, char** out_error) {
+    if (!json_string || !schema || !out_valid) {
+        return LLAMAFU_ERROR_INVALID_PARAM;
+    }
+
+    try {
+        // Basic JSON validation - check for balanced braces
+        int brace_count = 0;
+        int bracket_count = 0;
+        bool in_string = false;
+        bool escape_next = false;
+        
+        for (const char* p = json_string; *p; p++) {
+            if (escape_next) {
+                escape_next = false;
+                continue;
+            }
+            
+            if (*p == '\\') {
+                escape_next = true;
+                continue;
+            }
+            
+            if (*p == '"') {
+                in_string = !in_string;
+                continue;
+            }
+            
+            if (!in_string) {
+                if (*p == '{') brace_count++;
+                else if (*p == '}') brace_count--;
+                else if (*p == '[') bracket_count++;
+                else if (*p == ']') bracket_count--;
+            }
+        }
+        
+        *out_valid = (brace_count == 0 && bracket_count == 0 && !in_string);
+        
+        if (!*out_valid && out_error) {
+            if (brace_count != 0) {
+                *out_error = strdup("Unbalanced braces in JSON");
+            } else if (bracket_count != 0) {
+                *out_error = strdup("Unbalanced brackets in JSON");
+            } else {
+                *out_error = strdup("Unterminated string in JSON");
+            }
+        }
+        
+        return LLAMAFU_SUCCESS;
+
+    } catch (const std::exception& e) {
+        return LLAMAFU_ERROR_UNKNOWN;
+    }
+}

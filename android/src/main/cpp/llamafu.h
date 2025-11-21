@@ -526,8 +526,8 @@ LlamafuToken llamafu_token_nl(Llamafu llamafu);
 //
 
 // Create samplers
-LlamafuSampler* llamafu_sampler_chain_init(void);
-void llamafu_sampler_chain_add(LlamafuSampler chain, LlamafuSampler sampler);
+LlamafuSampler llamafu_sampler_chain_init(void);
+int32_t llamafu_sampler_chain_add(LlamafuSampler chain, LlamafuSampler sampler);
 void llamafu_sampler_free(LlamafuSampler sampler);
 
 // Individual samplers
@@ -1189,18 +1189,144 @@ typedef enum {
 typedef bool (*LlamafuAbortCallback)(void* user_data);
 typedef void (*LlamafuLogCallback)(LlamafuLogLevel level, const char* text, void* user_data);
 
+//
+// TOOL CALLING TYPES
+//
+
+// Tool choice behavior
+typedef enum {
+    LLAMAFU_TOOL_CHOICE_AUTO = 0,      // Model decides whether to call tools
+    LLAMAFU_TOOL_CHOICE_NONE = 1,      // Never call tools
+    LLAMAFU_TOOL_CHOICE_REQUIRED = 2,  // Must call at least one tool
+    LLAMAFU_TOOL_CHOICE_SPECIFIC = 3,  // Call specific tool by name
+} LlamafuToolChoiceType;
+
+// Tool definition
+typedef struct {
+    const char* name;                   // Tool name (e.g., "get_weather")
+    const char* description;            // Tool description
+    const char* parameters_schema;      // JSON Schema for parameters
+} LlamafuTool;
+
+// Tool call result
+typedef struct {
+    char* id;                           // Unique call ID
+    char* name;                         // Tool name that was called
+    char* arguments_json;               // JSON string of arguments
+} LlamafuToolCall;
+
+// Tool choice configuration
+typedef struct {
+    LlamafuToolChoiceType type;
+    const char* tool_name;              // For SPECIFIC type
+} LlamafuToolChoice;
+
+// Tool calling parameters
+typedef struct {
+    const char* prompt;                 // User prompt
+    const LlamafuTool* tools;           // Available tools
+    size_t n_tools;                     // Number of tools
+    LlamafuToolChoice tool_choice;      // Tool choice behavior
+
+    // Generation parameters
+    int32_t max_tokens;
+    float temperature;
+    uint32_t seed;
+
+    // Output control
+    bool allow_multiple_calls;          // Allow multiple tool calls
+    int32_t max_calls;                  // Maximum tool calls (0 = unlimited)
+} LlamafuToolCallParams;
+
+// JSON generation parameters
+typedef struct {
+    const char* prompt;                 // User prompt
+    const char* schema;                 // JSON Schema string
+
+    // Generation parameters
+    int32_t max_tokens;
+    float temperature;
+    uint32_t seed;
+} LlamafuJsonParams;
+
 // Extended performance and threading API
-int32_t llamafu_set_n_threads(Llamafu llamafu, int32_t n_threads, int32_t n_threads_batch);
-int32_t llamafu_get_n_threads(Llamafu llamafu, int32_t* out_n_threads, int32_t* out_n_threads_batch);
-int32_t llamafu_warmup(Llamafu llamafu);
-int32_t llamafu_get_timings(Llamafu llamafu, LlamafuTimings* out_timings);
+LlamafuError llamafu_set_n_threads(Llamafu llamafu, int32_t n_threads, int32_t n_threads_batch);
+LlamafuError llamafu_get_n_threads(Llamafu llamafu, int32_t* out_n_threads, int32_t* out_n_threads_batch);
+LlamafuError llamafu_warmup(Llamafu llamafu);
+LlamafuError llamafu_get_timings(Llamafu llamafu, LlamafuTimings* out_timings);
 void llamafu_reset_timings(Llamafu llamafu);
 void llamafu_print_timings(Llamafu llamafu);
-int32_t llamafu_get_system_info(LlamafuSystemInfo* out_info);
-int32_t llamafu_bench_model(Llamafu llamafu, int32_t n_threads, int32_t n_predict, LlamafuBenchResult* out_result);
-int32_t llamafu_set_abort_callback(Llamafu llamafu, LlamafuAbortCallback callback, void* user_data);
-int32_t llamafu_set_log_callback(LlamafuLogCallback callback, void* user_data);
-int32_t llamafu_get_memory_usage(Llamafu llamafu, LlamafuMemoryUsage* out_usage);
+LlamafuError llamafu_get_system_info(LlamafuSystemInfo* out_info);
+LlamafuError llamafu_bench_model(Llamafu llamafu, int32_t n_threads, int32_t n_predict, LlamafuBenchResult* out_result);
+LlamafuError llamafu_set_abort_callback(Llamafu llamafu, LlamafuAbortCallback callback, void* user_data);
+LlamafuError llamafu_set_log_callback(LlamafuLogCallback callback, void* user_data);
+LlamafuError llamafu_get_memory_usage(Llamafu llamafu, LlamafuMemoryUsage* out_usage);
+
+//
+// TOOL CALLING API
+//
+
+// Generate tool call from prompt
+LlamafuError llamafu_generate_tool_call(
+    Llamafu llamafu,
+    const LlamafuToolCallParams* params,
+    LlamafuToolCall** out_calls,
+    size_t* out_n_calls
+);
+
+// Generate tool call with streaming
+LlamafuError llamafu_generate_tool_call_streaming(
+    Llamafu llamafu,
+    const LlamafuToolCallParams* params,
+    LlamafuStreamCallback callback,
+    void* user_data,
+    LlamafuToolCall** out_calls,
+    size_t* out_n_calls
+);
+
+// Free tool call results
+void llamafu_free_tool_calls(LlamafuToolCall* calls, size_t n_calls);
+
+// Convert JSON Schema to GBNF grammar
+LlamafuError llamafu_schema_to_grammar(
+    const char* json_schema,
+    char** out_grammar
+);
+
+// Build tool calling grammar from tools
+LlamafuError llamafu_build_tool_grammar(
+    const LlamafuTool* tools,
+    size_t n_tools,
+    bool allow_multiple,
+    char** out_grammar
+);
+
+//
+// JSON OUTPUT API
+//
+
+// Generate JSON matching schema
+LlamafuError llamafu_generate_json(
+    Llamafu llamafu,
+    const LlamafuJsonParams* params,
+    char** out_json
+);
+
+// Generate JSON with streaming
+LlamafuError llamafu_generate_json_streaming(
+    Llamafu llamafu,
+    const LlamafuJsonParams* params,
+    LlamafuStreamCallback callback,
+    void* user_data
+);
+
+// Validate JSON against schema
+LlamafuError llamafu_json_validate(
+    const char* json_string,
+    const char* schema,
+    bool* out_valid,
+    char** out_error
+);
 
 
 #ifdef __cplusplus

@@ -409,6 +409,70 @@ final class LlamafuLoraAdapterInfoStruct extends Struct {
   external int created_timestamp;
 }
 
+/// Tool definition for tool calling API
+final class LlamafuToolStruct extends Struct {
+  external Pointer<Utf8> name;
+  external Pointer<Utf8> description;
+  external Pointer<Utf8> parameters_schema;
+}
+
+/// Tool call result
+final class LlamafuToolCallStruct extends Struct {
+  external Pointer<Utf8> id;
+  external Pointer<Utf8> name;
+  external Pointer<Utf8> arguments_json;
+}
+
+/// Tool choice configuration
+final class LlamafuToolChoiceStruct extends Struct {
+  @Int32()
+  external int type;
+  external Pointer<Utf8> tool_name;
+}
+
+/// Tool calling parameters
+final class LlamafuToolCallParamsStruct extends Struct {
+  external Pointer<Utf8> prompt;
+  external Pointer<LlamafuToolStruct> tools;
+
+  @IntPtr()
+  external int n_tools;
+
+  @Int32()
+  external int tool_choice_type;
+  external Pointer<Utf8> tool_choice_name;
+
+  @Int32()
+  external int max_tokens;
+
+  @Float()
+  external double temperature;
+
+  @Uint32()
+  external int seed;
+
+  @Bool()
+  external bool allow_multiple_calls;
+
+  @Int32()
+  external int max_calls;
+}
+
+/// JSON generation parameters
+final class LlamafuJsonParamsStruct extends Struct {
+  external Pointer<Utf8> prompt;
+  external Pointer<Utf8> schema;
+
+  @Int32()
+  external int max_tokens;
+
+  @Float()
+  external double temperature;
+
+  @Uint32()
+  external int seed;
+}
+
 // Callback for streaming output
 typedef LlamafuStreamCallbackC = Void Function(
     Pointer<Utf8> token, Pointer<Void> user_data);
@@ -854,6 +918,53 @@ typedef LlamafuFreeEmbeddingsDart = void Function(Pointer<Float> embeddings);
 
 typedef LlamafuPrintSystemInfoC = Pointer<Utf8> Function();
 typedef LlamafuPrintSystemInfoDart = Pointer<Utf8> Function();
+
+// Tool calling functions
+typedef LlamafuGenerateToolCallC = LlamafuError Function(
+    Llamafu llamafu, Pointer<LlamafuToolCallParamsStruct> params,
+    Pointer<Pointer<LlamafuToolCallStruct>> out_calls, Pointer<IntPtr> out_n_calls);
+typedef LlamafuGenerateToolCallDart = int Function(
+    Llamafu llamafu, Pointer<LlamafuToolCallParamsStruct> params,
+    Pointer<Pointer<LlamafuToolCallStruct>> out_calls, Pointer<IntPtr> out_n_calls);
+
+typedef LlamafuFreeToolCallsC = Void Function(
+    Pointer<LlamafuToolCallStruct> calls, IntPtr n_calls);
+typedef LlamafuFreeToolCallsDart = void Function(
+    Pointer<LlamafuToolCallStruct> calls, int n_calls);
+
+typedef LlamafuSchemaToGrammarC = LlamafuError Function(
+    Pointer<Utf8> json_schema, Pointer<Pointer<Utf8>> out_grammar);
+typedef LlamafuSchemaToGrammarDart = int Function(
+    Pointer<Utf8> json_schema, Pointer<Pointer<Utf8>> out_grammar);
+
+typedef LlamafuBuildToolGrammarC = LlamafuError Function(
+    Pointer<LlamafuToolStruct> tools, IntPtr n_tools, Bool allow_multiple,
+    Pointer<Pointer<Utf8>> out_grammar);
+typedef LlamafuBuildToolGrammarDart = int Function(
+    Pointer<LlamafuToolStruct> tools, int n_tools, bool allow_multiple,
+    Pointer<Pointer<Utf8>> out_grammar);
+
+// JSON output functions
+typedef LlamafuGenerateJsonC = LlamafuError Function(
+    Llamafu llamafu, Pointer<LlamafuJsonParamsStruct> params,
+    Pointer<Pointer<Utf8>> out_json);
+typedef LlamafuGenerateJsonDart = int Function(
+    Llamafu llamafu, Pointer<LlamafuJsonParamsStruct> params,
+    Pointer<Pointer<Utf8>> out_json);
+
+typedef LlamafuGenerateJsonStreamingC = LlamafuError Function(
+    Llamafu llamafu, Pointer<LlamafuJsonParamsStruct> params,
+    Pointer<NativeFunction<LlamafuStreamCallbackC>> callback, Pointer<Void> user_data);
+typedef LlamafuGenerateJsonStreamingDart = int Function(
+    Llamafu llamafu, Pointer<LlamafuJsonParamsStruct> params,
+    Pointer<NativeFunction<LlamafuStreamCallbackC>> callback, Pointer<Void> user_data);
+
+typedef LlamafuJsonValidateC = LlamafuError Function(
+    Pointer<Utf8> json_string, Pointer<Utf8> schema,
+    Pointer<Bool> out_valid, Pointer<Pointer<Utf8>> out_error);
+typedef LlamafuJsonValidateDart = int Function(
+    Pointer<Utf8> json_string, Pointer<Utf8> schema,
+    Pointer<Bool> out_valid, Pointer<Pointer<Utf8>> out_error);
 
 final class LlamafuBindings {
   final DynamicLibrary _dylib;
