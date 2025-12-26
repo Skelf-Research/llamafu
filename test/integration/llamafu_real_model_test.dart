@@ -44,7 +44,7 @@ void main() {
       llamafu = await Llamafu.init(
         modelPath: testModelPath,
         contextSize: 2048,
-        nThreads: 4,
+        threads: 4,
       );
       print('Model loaded successfully');
     });
@@ -554,7 +554,7 @@ void main() {
       llamafu = await Llamafu.init(
         modelPath: testModelPath,
         contextSize: 2048,
-        nThreads: 4,
+        threads: 4,
       );
     });
 
@@ -654,7 +654,7 @@ void main() {
         modelPath: testModelPath,
         mmprojPath: testMmprojPath,
         contextSize: 2048,
-        nThreads: 4,
+        threads: 4,
       );
 
       // Would need a real test image

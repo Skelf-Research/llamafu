@@ -1,12 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-/// Type of media input.
-enum MediaType {
-  image,
-  audio,
-  video,
-}
+import 'llamafu_base.dart' show MediaType;
 
 /// Source type for media data.
 enum MediaSource {

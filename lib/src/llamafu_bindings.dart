@@ -1351,10 +1351,50 @@ final class LlamafuBindings {
   }
 
   static Future<LlamafuBindings> init() async {
-    final dylib = Platform.isAndroid
-        ? DynamicLibrary.open('libllamafu.so')
-        : DynamicLibrary.process();
+    final DynamicLibrary dylib;
+
+    if (Platform.isAndroid) {
+      dylib = DynamicLibrary.open('libllamafu.so');
+    } else if (Platform.isIOS) {
+      dylib = DynamicLibrary.process();
+    } else if (Platform.isMacOS) {
+      // Try to load from common locations
+      dylib = _loadLibrary([
+        'libllamafu.dylib',
+        'build/lib/macos/arm64/libllamafu.dylib',
+        'build/lib/macos/x86_64/libllamafu.dylib',
+      ]);
+    } else if (Platform.isLinux) {
+      // Try to load from common locations
+      dylib = _loadLibrary([
+        'libllamafu.so',
+        'build/libllamafu.so',
+        'build/lib/linux/x64/libllamafu.so',
+        'build/lib/linux/arm64/libllamafu.so',
+      ]);
+    } else if (Platform.isWindows) {
+      dylib = _loadLibrary([
+        'llamafu.dll',
+        'build/llamafu.dll',
+        'build/lib/windows/x64/llamafu.dll',
+      ]);
+    } else {
+      dylib = DynamicLibrary.process();
+    }
+
     return LlamafuBindings._(dylib);
+  }
+
+  static DynamicLibrary _loadLibrary(List<String> paths) {
+    for (final path in paths) {
+      try {
+        return DynamicLibrary.open(path);
+      } catch (_) {
+        // Try next path
+      }
+    }
+    // Fall back to process symbols
+    return DynamicLibrary.process();
   }
 
   int llamafuInit(Pointer<LlamafuModelParams> params, Pointer<Llamafu> out_llamafu) {

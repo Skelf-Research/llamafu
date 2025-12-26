@@ -1,0 +1,13 @@
+framework module llamafu {
+  umbrella header "llamafu.h"
+
+  export *
+  module * { export * }
+
+  link framework "Foundation"
+  link framework "Accelerate"
+  link framework "Metal"
+  link framework "MetalKit"
+
+  link "c++"
+}

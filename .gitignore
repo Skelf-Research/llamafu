@@ -27,3 +27,12 @@ doc/api/
 
 .flutter-plugins
 .flutter-plugins-dependencies
+
+# Test model files (large, download with tools/download-test-models.sh)
+*.gguf
+test/fixtures/models/*.gguf
+!test/fixtures/models/README.md
+
+# iOS build artifacts
+ios/Frameworks/*.a
+ios/Frameworks/*.xcframework

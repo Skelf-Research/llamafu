@@ -65,31 +65,16 @@ typedef enum {
     LLAMAFU_ERROR_IMAGE_TOO_SMALL = -33,
     LLAMAFU_ERROR_INVALID_DIMENSIONS = -34,
     LLAMAFU_ERROR_BATCH_PROCESS_FAILED = -35,
+    LLAMAFU_ERROR_ABORTED = -36,
 } LlamafuError;
 
-// Model parameters (updated for modern API)
+// Model parameters - simplified for FFI compatibility
 typedef struct {
     const char* model_path;           // Path to model file
     const char* mmproj_path;          // Multi-modal projector path (optional)
-
-    // GPU configuration
-    int32_t n_gpu_layers;             // Number of layers to offload to GPU (-1 = all)
-    int32_t main_gpu;                 // Main GPU device (-1 = auto)
-    const float* tensor_split;        // Tensor split ratios for multi-GPU
-
-    // Model behavior
-    bool vocab_only;                  // Load vocabulary only
-    bool use_mmap;                    // Use memory mapping
-    bool use_mlock;                   // Lock memory pages
-
-    // Advanced parameters
-    uint32_t split_mode;              // Split mode for multi-file models
-    float rope_freq_base;             // RoPE frequency base (0.0 = model default)
-    float rope_freq_scale;            // RoPE frequency scale (0.0 = model default)
-
-    // Progress callback
-    void (*progress_callback)(float progress, void* ctx);
-    void* progress_callback_user_data;
+    int32_t n_threads;                // Number of threads (-1 = auto)
+    int32_t n_ctx;                    // Context size
+    uint8_t use_gpu;                  // Whether to use GPU (0 = no, 1 = yes)
 } LlamafuModelParams;
 
 // Context parameters (updated)

@@ -1,0 +1,86 @@
+site_name: Llamafu Documentation
+site_description: Flutter FFI plugin for on-device LLM inference using llama.cpp
+site_author: Llamafu Contributors
+repo_url: https://github.com/anthropics/llamafu
+repo_name: llamafu
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [.]
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: guides/installation.md
+    - Quick Start: guides/quickstart.md
+    - Basic Usage: guides/basic-usage.md
+  - Guides:
+    - Text Generation: guides/text-generation.md
+    - Multimodal (Vision & Audio): guides/multimodal.md
+    - Chat Sessions: guides/chat-sessions.md
+    - LoRA Adapters: guides/lora-adapters.md
+    - Samplers & Parameters: guides/samplers.md
+    - Performance Tuning: guides/performance.md
+  - API Reference:
+    - Llamafu Class: api/llamafu.md
+    - Model Parameters: api/parameters.md
+    - Inference Options: api/inference.md
+    - Multimodal API: api/multimodal.md
+    - Samplers API: api/samplers.md
+    - Error Handling: api/errors.md
+  - Examples:
+    - Simple Chatbot: examples/chatbot.md
+    - Image Analysis: examples/image-analysis.md
+    - Streaming Output: examples/streaming.md
+  - Building:
+    - Build from Source: guides/building.md
+    - Platform Notes: guides/platforms.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/anthropics/llamafu

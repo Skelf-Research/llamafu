@@ -900,7 +900,8 @@ class Llamafu {
       }
     }
 
-    nativeCallback = NativeCallable<LlamafuStreamCallbackC>.listener(onToken);
+    // Use isolateLocal for synchronous callback execution during FFI call
+    nativeCallback = NativeCallable<LlamafuStreamCallbackC>.isolateLocal(onToken);
 
     try {
       // Perform streaming completion
@@ -1056,7 +1057,8 @@ class Llamafu {
       }
     }
 
-    nativeCallback = NativeCallable<LlamafuStreamCallbackC>.listener(onToken);
+    // Use isolateLocal for synchronous callback execution during FFI call
+    nativeCallback = NativeCallable<LlamafuStreamCallbackC>.isolateLocal(onToken);
 
     try {
       // Perform streaming completion with grammar
@@ -1166,7 +1168,8 @@ class Llamafu {
       }
     }
 
-    nativeCallback = NativeCallable<LlamafuStreamCallbackC>.listener(onToken);
+    // Use isolateLocal for synchronous callback execution during FFI call
+    nativeCallback = NativeCallable<LlamafuStreamCallbackC>.isolateLocal(onToken);
 
     try {
       // Perform streaming multi-modal completion
@@ -2562,6 +2565,7 @@ class JsonValidationResult {
 class Sampler {
   final LlamafuBindings _bindings;
   final Pointer<Void> _nativeSampler;
+  bool _ownedByChain = false;
 
   Sampler._(this._bindings, this._nativeSampler);
 
@@ -2572,7 +2576,13 @@ class Sampler {
   void accept(int token) => _bindings.llamafuSamplerAccept(_nativeSampler, token);
 
   /// Disposes of the sampler.
-  void dispose() => _bindings.llamafuSamplerFree(_nativeSampler);
+  /// Note: If this sampler was added to a chain, dispose is a no-op
+  /// because the chain owns the sampler and will free it.
+  void dispose() {
+    if (!_ownedByChain) {
+      _bindings.llamafuSamplerFree(_nativeSampler);
+    }
+  }
 }
 
 /// Represents a chain of samplers.
@@ -2584,8 +2594,11 @@ class SamplerChain {
   SamplerChain._(this._bindings, this._nativeChain, this._llamafuInstance);
 
   /// Adds a sampler to the chain.
+  /// Note: The chain takes ownership of the sampler. Do not dispose
+  /// the sampler after adding it to a chain.
   void add(Sampler sampler) {
     _bindings.llamafuSamplerChainAdd(_nativeChain, sampler._nativeSampler);
+    sampler._ownedByChain = true;
   }
 
   /// Samples a token using the chain.

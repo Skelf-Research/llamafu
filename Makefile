@@ -1,7 +1,7 @@
 # Llamafu Makefile
 # Run 'make help' to see available targets
 
-.PHONY: help setup deps build build-debug build-release build-android build-ios test test-all test-unit test-integration test-performance test-native test-real format analyze docs audit clean clean-all
+.PHONY: help setup deps build build-debug build-release build-android build-ios test test-all test-unit test-integration test-performance test-native test-real test-models format analyze docs audit clean clean-all
 
 # Default target
 help:
@@ -27,6 +27,7 @@ help:
 	@echo "  make test-performance - Run performance tests"
 	@echo "  make test-native    - Run C++ native tests"
 	@echo "  make test-real      - Run real model tests (set LLAMAFU_TEST_MODEL)"
+	@echo "  make test-models    - Download test models (SmolLM 135M recommended)"
 	@echo ""
 	@echo "Code Quality:"
 	@echo "  make format         - Format Dart code"
@@ -88,12 +89,16 @@ test-real:
 	@if [ -z "$(LLAMAFU_TEST_MODEL)" ]; then \
 		echo "Error: LLAMAFU_TEST_MODEL not set"; \
 		echo "Usage: make test-real LLAMAFU_TEST_MODEL=/path/to/model.gguf"; \
+		echo "Or run: make test-models && make test-real LLAMAFU_TEST_MODEL=test/fixtures/models/test-model.gguf"; \
 		exit 1; \
 	fi
 	LLAMAFU_TEST_MODEL=$(LLAMAFU_TEST_MODEL) \
 	LLAMAFU_TEST_LORA=$(LLAMAFU_TEST_LORA) \
 	LLAMAFU_TEST_MMPROJ=$(LLAMAFU_TEST_MMPROJ) \
 	flutter test test/integration/llamafu_real_model_test.dart
+
+test-models:
+	./tools/download-test-models.sh --smol
 
 # Code quality
 format:

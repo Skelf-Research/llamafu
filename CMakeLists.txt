@@ -120,28 +120,84 @@ set(LLAMAFU_SOURCES
     android/src/main/cpp/llamafu.h
 )
 
-# Create unified native library
-add_library(llamafu_native STATIC ${LLAMAFU_SOURCES})
+# Add multimodal support for vision models (LLaVA, nanoLLaVA, etc.)
+# Includes CLIP for vision and audio preprocessing for Whisper-style models
+set(MTMD_SOURCES
+    llama.cpp/tools/mtmd/clip.cpp
+    llama.cpp/tools/mtmd/clip.h
+    llama.cpp/tools/mtmd/clip-impl.h
+    llama.cpp/tools/mtmd/mtmd-audio.cpp
+    llama.cpp/tools/mtmd/mtmd-audio.h
+    llama.cpp/tools/mtmd/mtmd-helper.cpp
+    llama.cpp/tools/mtmd/mtmd-helper.h
+    # Model-specific implementations
+    llama.cpp/tools/mtmd/models/models.h
+    llama.cpp/tools/mtmd/models/cogvlm.cpp
+    llama.cpp/tools/mtmd/models/conformer.cpp
+    llama.cpp/tools/mtmd/models/glm4v.cpp
+    llama.cpp/tools/mtmd/models/internvl.cpp
+    llama.cpp/tools/mtmd/models/kimivl.cpp
+    llama.cpp/tools/mtmd/models/llama4.cpp
+    llama.cpp/tools/mtmd/models/llava.cpp
+    llama.cpp/tools/mtmd/models/minicpmv.cpp
+    llama.cpp/tools/mtmd/models/pixtral.cpp
+    llama.cpp/tools/mtmd/models/qwen2vl.cpp
+    llama.cpp/tools/mtmd/models/qwen3vl.cpp
+    llama.cpp/tools/mtmd/models/siglip.cpp
+    llama.cpp/tools/mtmd/models/whisper-enc.cpp
+)
 
-# Include directories
+# Create unified native static library
+add_library(llamafu_native STATIC ${LLAMAFU_SOURCES} ${MTMD_SOURCES})
+
+# Include directories for static lib
 target_include_directories(llamafu_native PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/include
     ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/ggml/include
     ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/tools/mtmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/vendor
 )
 
 # Link with llama.cpp
 target_link_libraries(llamafu_native PRIVATE llama ggml)
 
-# Platform-specific linking
+# Create shared library for FFI (desktop testing and runtime)
+add_library(llamafu SHARED ${LLAMAFU_SOURCES} ${MTMD_SOURCES})
+
+target_include_directories(llamafu PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/ggml/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/tools/mtmd
+    ${CMAKE_CURRENT_SOURCE_DIR}/llama.cpp/vendor
+)
+
+target_link_libraries(llamafu PRIVATE llama ggml)
+
+# Set shared library output to build directory root for easy loading
+set_target_properties(llamafu PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
+# Platform-specific linking for both static and shared libraries
 if(APPLE)
     if(IOS)
         target_link_libraries(llamafu_native PRIVATE
             "-framework Foundation"
             "-framework Accelerate"
         )
+        target_link_libraries(llamafu PRIVATE
+            "-framework Foundation"
+            "-framework Accelerate"
+        )
         if(LLAMAFU_ENABLE_METAL)
             target_link_libraries(llamafu_native PRIVATE
+                "-framework Metal"
+                "-framework MetalKit"
+            )
+            target_link_libraries(llamafu PRIVATE
                 "-framework Metal"
                 "-framework MetalKit"
             )
@@ -151,8 +207,16 @@ if(APPLE)
             "-framework Foundation"
             "-framework Accelerate"
         )
+        target_link_libraries(llamafu PRIVATE
+            "-framework Foundation"
+            "-framework Accelerate"
+        )
         if(LLAMAFU_ENABLE_METAL)
             target_link_libraries(llamafu_native PRIVATE
+                "-framework Metal"
+                "-framework MetalKit"
+            )
+            target_link_libraries(llamafu PRIVATE
                 "-framework Metal"
                 "-framework MetalKit"
             )
@@ -163,8 +227,16 @@ elseif(ANDROID)
         log
         android
     )
+    target_link_libraries(llamafu PRIVATE
+        log
+        android
+    )
 elseif(WIN32)
     target_link_libraries(llamafu_native PRIVATE
+        ws2_32
+        winmm
+    )
+    target_link_libraries(llamafu PRIVATE
         ws2_32
         winmm
     )
@@ -174,42 +246,54 @@ else()
         dl
         m
     )
+    target_link_libraries(llamafu PRIVATE
+        pthread
+        dl
+        m
+    )
 endif()
 
-# Compiler-specific flags
+# Compiler-specific flags for both static and shared libraries
+set(LLAMAFU_TARGETS llamafu_native llamafu)
+
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-    target_compile_options(llamafu_native PRIVATE
-        -Wall
-        -Wextra
-        -Wpedantic
-        -Wno-unused-parameter
-        -Wno-unused-variable
-    )
+    foreach(target ${LLAMAFU_TARGETS})
+        target_compile_options(${target} PRIVATE
+            -Wall
+            -Wextra
+            -Wpedantic
+            -Wno-unused-parameter
+            -Wno-unused-variable
+            -Wno-unused-function
+        )
 
-    # Release optimizations
-    target_compile_options(llamafu_native PRIVATE
-        $<$<CONFIG:Release>:-O3>
-        $<$<CONFIG:Release>:-DNDEBUG>
-        $<$<CONFIG:Release>:-ffast-math>
-    )
+        # Release optimizations
+        target_compile_options(${target} PRIVATE
+            $<$<CONFIG:Release>:-O3>
+            $<$<CONFIG:Release>:-DNDEBUG>
+            $<$<CONFIG:Release>:-ffast-math>
+        )
 
-    # Debug flags
-    target_compile_options(llamafu_native PRIVATE
-        $<$<CONFIG:Debug>:-g>
-        $<$<CONFIG:Debug>:-O0>
-    )
+        # Debug flags
+        target_compile_options(${target} PRIVATE
+            $<$<CONFIG:Debug>:-g>
+            $<$<CONFIG:Debug>:-O0>
+        )
+    endforeach()
 elseif(MSVC)
-    target_compile_options(llamafu_native PRIVATE
-        /W4
-        /wd4100  # Unreferenced formal parameter
-        /wd4201  # Nameless struct/union
-    )
+    foreach(target ${LLAMAFU_TARGETS})
+        target_compile_options(${target} PRIVATE
+            /W4
+            /wd4100  # Unreferenced formal parameter
+            /wd4201  # Nameless struct/union
+        )
 
-    # Release optimizations
-    target_compile_options(llamafu_native PRIVATE
-        $<$<CONFIG:Release>:/O2>
-        $<$<CONFIG:Release>:/DNDEBUG>
-    )
+        # Release optimizations
+        target_compile_options(${target} PRIVATE
+            $<$<CONFIG:Release>:/O2>
+            $<$<CONFIG:Release>:/DNDEBUG>
+        )
+    endforeach()
 endif()
 
 # Installation
