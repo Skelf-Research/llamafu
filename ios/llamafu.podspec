@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'llamafu'
-  s.version          = '0.0.1'
+  s.version          = '0.1.0'
   s.summary          = 'A Flutter package for running language models on device.'
   s.description      = <<-DESC
 A Flutter package for running language models on device with support for completion,

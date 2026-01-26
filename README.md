@@ -64,7 +64,7 @@ Or add manually to `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  llamafu: ^0.0.1
+  llamafu: ^0.1.0
 ```
 
 ## Quick Start
