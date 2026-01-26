@@ -1,0 +1,53 @@
+# Pub ignore file - exclude files from published package
+
+# llama.cpp submodule (users build from source or download prebuilt)
+llama.cpp/
+
+# Build artifacts
+build/
+.dart_tool/
+*.o
+*.a
+*.so
+*.dylib
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Coverage
+coverage/
+
+# Documentation site (not the docs/ folder with markdown)
+documentation/
+
+# Test fixtures with large files
+test/fixtures/models/
+
+# Development tools and scripts
+tools/
+Makefile
+
+# Git
+.git/
+.gitmodules
+
+# CI/CD
+.github/
+
+# Archive docs
+docs/archive/
+
+# Native test files
+test/native/
+
+# CMake build files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+
+# Editor backups
+*~
+*.swp
+*.swo
