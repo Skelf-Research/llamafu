@@ -1,39 +1,70 @@
 # Llamafu
 
-A Flutter FFI plugin for running large language models on-device using llama.cpp. Provides high-performance inference with support for text generation, multimodal inputs, LoRA adapters, and structured output.
+[![pub package](https://img.shields.io/pub/v/llamafu.svg)](https://pub.dev/packages/llamafu)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Platform](https://img.shields.io/badge/platform-android%20%7C%20ios-lightgrey.svg)](https://flutter.dev)
+[![Dart 3](https://img.shields.io/badge/Dart-3.1+-00B4AB.svg)](https://dart.dev)
+[![Flutter 3](https://img.shields.io/badge/Flutter-3.10+-02569B.svg)](https://flutter.dev)
+[![llama.cpp](https://img.shields.io/badge/powered%20by-llama.cpp-orange.svg)](https://github.com/ggerganov/llama.cpp)
+
+**Run AI models directly on mobile devices. No cloud. No latency. Complete privacy.**
+
+Llamafu is a Flutter FFI plugin that brings the power of large language models to your mobile apps. Built on [llama.cpp](https://github.com/ggerganov/llama.cpp), it delivers high-performance inference with support for text generation, vision, tool calling, and more—all running locally on the device.
+
+## Why Llamafu?
+
+| Feature | Benefit |
+|---------|---------|
+| **100% On-Device** | No API keys, no network calls, works offline |
+| **Privacy First** | Data never leaves the device |
+| **Low Latency** | No round-trip to cloud servers |
+| **Cost Effective** | No per-token API charges |
 
 ## Features
 
-- On-device inference without network dependency
-- Cross-platform support for Android and iOS
-- Multimodal processing (images, audio)
-- Dynamic LoRA adapter loading
-- Tool calling (function calling) support
-- Structured JSON output generation
-- Grammar-constrained generation
-- Streaming token generation
-- Embeddings generation
-- Advanced sampling controls
+**Core Capabilities**
+- Text generation with streaming support
+- Chat completions with conversation history
+- Embeddings generation for semantic search
+
+**Advanced AI**
+- Vision/multimodal (images, audio) with LLaVA, Qwen2-VL
+- Tool calling / function calling
+- Structured JSON output with schema validation
+- Grammar-constrained generation (GBNF)
+
+**Customization**
+- LoRA adapter loading and hot-swapping
+- Fine-grained sampling controls (temperature, top-k, top-p, penalties)
+- Configurable context size and threading
+
+**Platform Support**
+- Android (API 21+) and iOS (12.0+)
+- Optimized native code via FFI
+- GPU acceleration where available
 
 ## Requirements
 
-- Flutter 3.10.0+
-- Dart SDK 3.1.0+
-- Android: API 21+ (Android 5.0), NDK 21+
-- iOS: 12.0+, Xcode 14+
-- GGUF format models
+| Platform | Minimum Version |
+|----------|-----------------|
+| Flutter | 3.10.0+ |
+| Dart SDK | 3.1.0+ |
+| Android | API 21+ (Android 5.0), NDK 21+ |
+| iOS | 12.0+, Xcode 14+ |
+
+Models must be in [GGUF format](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md). Quantized versions (Q4_K_M, Q8_0) recommended for mobile.
 
 ## Installation
 
-Add to your `pubspec.yaml`:
+```bash
+flutter pub add llamafu
+```
+
+Or add manually to `pubspec.yaml`:
 
 ```yaml
 dependencies:
   llamafu: ^0.0.1
-```
-
-```bash
-flutter pub get
 ```
 
 ## Quick Start
@@ -41,37 +72,45 @@ flutter pub get
 ```dart
 import 'package:llamafu/llamafu.dart';
 
-// Initialize with model
-final llamafu = await Llamafu.init(
-  modelPath: '/path/to/model.gguf',
-  threads: 4,
-  contextSize: 2048,
-);
+void main() async {
+  // Load a GGUF model
+  final llamafu = await Llamafu.init(
+    modelPath: '/path/to/model.gguf',
+    threads: 4,
+    contextSize: 2048,
+  );
 
-// Generate text
-final result = await llamafu.complete(
-  prompt: 'Explain quantum computing:',
-  maxTokens: 256,
-  temperature: 0.7,
-);
+  // Generate text
+  final result = await llamafu.complete(
+    prompt: 'Explain quantum computing in simple terms:',
+    maxTokens: 256,
+    temperature: 0.7,
+  );
 
-print(result);
+  print(result);
 
-// Clean up
-llamafu.close();
+  // Always clean up resources
+  llamafu.close();
+}
 ```
+
+That's it! The model runs entirely on the device—no internet required.
 
 ## Documentation
 
-- [Getting Started](docs/getting-started.md) - Installation and setup
-- [High-Level APIs](docs/high-level-apis.md) - Chat, LoRA, and Multimodal APIs
-- [Tool Calling](docs/tool-calling.md) - Tool calling and JSON output
-- [API Reference](docs/api-reference.md) - Complete API documentation
-- [Architecture](docs/architecture.md) - Technical design and internals
-- [Building](docs/building.md) - Build from source
-- [Model Guide](docs/model-guide.md) - Model selection and formats
-- [Performance Guide](docs/performance-guide.md) - Optimization techniques
-- [Contributing](docs/contributing.md) - Development guidelines
+| Guide | Description |
+|-------|-------------|
+| [Getting Started](docs/getting-started.md) | Installation and first steps |
+| [Model Guide](docs/model-guide.md) | Choosing and obtaining models |
+| [High-Level APIs](docs/high-level-apis.md) | Chat, LoRA, and multimodal |
+| [Tool Calling](docs/tool-calling.md) | Function calling and JSON output |
+| [Performance Guide](docs/performance-guide.md) | Memory and speed optimization |
+| [API Reference](docs/api-reference.md) | Complete API documentation |
+| [Architecture](docs/architecture.md) | Technical design (for contributors) |
+| [Building](docs/building.md) | Build from source |
+| [Contributing](docs/contributing.md) | Development guidelines |
+
+---
 
 ## Usage Examples
 
@@ -206,113 +245,137 @@ print('Context: ${info.contextLength}');
 
 ## Supported Models
 
-Text models:
-- LLaMA 2, LLaMA 3
-- Mistral, Mixtral
-- Phi-2, Phi-3
-- Qwen, Qwen2
-- Code LLaMA
+Works with any GGUF-format model. Popular choices for mobile:
 
-Vision models:
-- LLaVA
-- Qwen2-VL
-- Moondream
+| Category | Models |
+|----------|--------|
+| **General** | LLaMA 3, Mistral, Phi-3, Qwen2, Gemma 2 |
+| **Code** | Code LLaMA, DeepSeek Coder, StarCoder2 |
+| **Vision** | LLaVA, Qwen2-VL, Moondream |
+| **Small/Fast** | Phi-3 Mini, TinyLlama, Gemma 2B |
 
-All models must be in GGUF format. Quantized models (Q4_K_M, Q8_0) are recommended for mobile.
+**Recommended quantizations for mobile:** Q4_K_M (best quality/size), Q4_0 (fastest), Q8_0 (highest quality)
 
-## Building from Source
+Find models at [Hugging Face](https://huggingface.co/models?library=gguf) or convert your own with [llama.cpp](https://github.com/ggerganov/llama.cpp).
+
+---
+
+## For Developers
+
+### Building from Source
 
 ```bash
 # Clone with submodules
-git clone --recursive https://github.com/dipankar/llamafu.git
+git clone --recursive https://github.com/neul-labs/llamafu.git
 cd llamafu
 
-# Setup environment
+# Setup development environment
 make setup
 
-# Build native libraries
+# Build and test
 make build
-
-# Run tests
 make test
 ```
 
-Platform-specific builds:
+**Platform-specific builds:**
 
 ```bash
-# Android
-make build-android
-
-# iOS
-make build-ios
-
-# Local development with GPU
-make build-local
+make build-android    # Android AAR
+make build-ios        # iOS framework
+make build-local      # Local dev with GPU support
 ```
 
-## Project Structure
+### Project Structure
 
 ```
 llamafu/
 ├── lib/src/
 │   ├── llamafu_base.dart       # High-level Dart API
-│   └── llamafu_bindings.dart   # FFI bindings
+│   └── llamafu_bindings.dart   # FFI bindings (dart:ffi)
 ├── android/src/main/cpp/
 │   ├── llamafu.h               # C API header
 │   └── llamafu.cpp             # Native implementation
 ├── ios/Classes/                # iOS native code
-├── llama.cpp/                  # llama.cpp submodule
-├── test/                       # Test suite
-├── example/                    # Example app
+├── llama.cpp/                  # llama.cpp submodule (inference engine)
+├── test/                       # Comprehensive test suite
+├── tools/                      # Build and test scripts
+├── example/                    # Example Flutter app
 └── docs/                       # Documentation
 ```
 
-## Performance Tips
+### Architecture
 
-- Use quantized models (Q4_K_M) for mobile deployment
-- Set context size based on available memory
-- Use `threads: Platform.numberOfProcessors - 1`
-- Enable GPU offloading where available
-- Implement proper resource cleanup with `close()`
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Your Flutter App                      │
+├─────────────────────────────────────────────────────────┤
+│              Llamafu Dart API (lib/src/)                │
+│         High-level, type-safe, async interface          │
+├─────────────────────────────────────────────────────────┤
+│           FFI Bindings (llamafu_bindings.dart)          │
+│              dart:ffi ↔ Native C bridge                 │
+├─────────────────────────────────────────────────────────┤
+│            Native C++ Layer (llamafu.cpp)               │
+│              RAII, memory safety, validation            │
+├─────────────────────────────────────────────────────────┤
+│                    llama.cpp Engine                      │
+│        High-performance inference, GGUF loading         │
+└─────────────────────────────────────────────────────────┘
+```
 
-## Error Handling
+### Performance Tips
+
+- **Use quantized models** — Q4_K_M offers the best quality/size tradeoff for mobile
+- **Right-size context** — Smaller context = less memory (start with 2048, increase if needed)
+- **Tune threading** — `threads: Platform.numberOfProcessors - 1` is a good default
+- **Clean up resources** — Always call `close()` when done to free native memory
+- **Stream responses** — Use streaming for better perceived performance in chat UIs
+
+### Error Handling
 
 ```dart
 try {
-  final result = await llamafu.complete(
-    prompt: input,
-    maxTokens: 200,
-  );
+  final result = await llamafu.complete(prompt: input, maxTokens: 200);
 } on LlamafuException catch (e) {
   switch (e.code) {
     case LlamafuErrorCode.modelLoadFailed:
-      // Handle model loading error
-      break;
+      print('Could not load model: ${e.message}');
     case LlamafuErrorCode.outOfMemory:
-      // Handle memory error
-      break;
+      print('Not enough memory—try a smaller model or context size');
     default:
-      // Handle other errors
+      print('Error: ${e.message}');
   }
 }
 ```
+
+---
+
+## Contributing
+
+Contributions are welcome! See [docs/contributing.md](docs/contributing.md) for guidelines.
+
+```bash
+# Run the full test suite
+make test
+
+# Format and lint
+dart format . && dart analyze
+```
+
+## Support
+
+- **Issues:** [GitHub Issues](https://github.com/neul-labs/llamafu/issues)
+- **Docs:** [docs/](docs/)
 
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
 
-llama.cpp is licensed under the MIT License.
-
-## Contributing
-
-See [docs/contributing.md](docs/contributing.md) for development guidelines.
-
-## Support
-
-- Issues: https://github.com/dipankar/llamafu/issues
-- Documentation: [docs/](docs/)
+---
 
 ## Acknowledgments
 
-- [llama.cpp](https://github.com/ggerganov/llama.cpp) - Inference engine
-- [ggml](https://github.com/ggerganov/ggml) - Tensor library
+Built on the shoulders of giants:
+
+- [llama.cpp](https://github.com/ggerganov/llama.cpp) — The inference engine that makes this possible
+- [ggml](https://github.com/ggerganov/ggml) — Tensor library for efficient ML computation

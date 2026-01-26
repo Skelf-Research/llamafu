@@ -1,10 +1,10 @@
 name: llamafu
 description: A Flutter package for running language models on device with support for completion, instruct mode, tool calling, streaming, constrained generation, LoRA, and multi-modal inputs (images, audio).
 version: 0.0.1
-homepage: https://github.com/dipankar/llamafu
-repository: https://github.com/dipankar/llamafu
-issue_tracker: https://github.com/dipankar/llamafu/issues
-documentation: https://github.com/dipankar/llamafu#readme
+homepage: https://github.com/neul-labs/llamafu
+repository: https://github.com/neul-labs/llamafu
+issue_tracker: https://github.com/neul-labs/llamafu/issues
+documentation: https://docs.neullabs.com/llamafu
 
 environment:
   sdk: '>=3.1.0 <4.0.0'

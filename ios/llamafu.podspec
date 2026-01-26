@@ -11,7 +11,7 @@ A Flutter package for running language models on device with support for complet
 instruct mode, tool calling, streaming, constrained generation, multimodal inference,
 and LoRA adapters. Powered by llama.cpp for efficient on-device inference.
                        DESC
-  s.homepage         = 'https://github.com/dipankar/llamafu'
+  s.homepage         = 'https://github.com/neul-labs/llamafu'
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'Llamafu Team' => 'email@example.com' }
   s.source           = { :path => '.' }
