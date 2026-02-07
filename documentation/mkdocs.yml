@@ -1,7 +1,7 @@
 site_name: Llamafu Documentation
 site_description: Flutter FFI plugin for on-device LLM inference using llama.cpp
 site_author: Llamafu Contributors
-repo_url: https://github.com/anthropics/llamafu
+repo_url: https://github.com/skelf-research/llamafu
 repo_name: llamafu
 
 theme:
@@ -83,4 +83,4 @@ nav:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/anthropics/llamafu
+      link: https://github.com/skelf-research/llamafu

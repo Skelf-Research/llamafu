@@ -266,7 +266,7 @@ Find models at [Hugging Face](https://huggingface.co/models?library=gguf) or con
 
 ```bash
 # Clone with submodules
-git clone --recursive https://github.com/neul-labs/llamafu.git
+git clone --recursive https://github.com/skelf-research/llamafu.git
 cd llamafu
 
 # Setup development environment
@@ -364,7 +364,7 @@ dart format . && dart analyze
 
 ## Support
 
-- **Issues:** [GitHub Issues](https://github.com/neul-labs/llamafu/issues)
+- **Issues:** [GitHub Issues](https://github.com/skelf-research/llamafu/issues)
 - **Docs:** [docs/](docs/)
 
 ## License

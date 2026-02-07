@@ -78,6 +78,6 @@ See the [Installation Guide](guides/installation.md) for detailed setup instruct
 
 ## Getting Help
 
-- [GitHub Issues](https://github.com/anthropics/llamafu/issues) - Bug reports and feature requests
+- [GitHub Issues](https://github.com/skelf-research/llamafu/issues) - Bug reports and feature requests
 - [API Reference](api/llamafu.md) - Complete API documentation
 - [Examples](examples/chatbot.md) - Working code examples

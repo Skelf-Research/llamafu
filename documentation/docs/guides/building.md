@@ -35,7 +35,7 @@ Build Llamafu from source for custom configurations or development.
 ## Clone the Repository
 
 ```bash
-git clone https://github.com/anthropics/llamafu.git
+git clone https://github.com/skelf-research/llamafu.git
 cd llamafu
 
 # Initialize llama.cpp submodule

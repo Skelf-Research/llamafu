@@ -16,7 +16,7 @@ Guidelines for contributing to Llamafu.
 
 ```bash
 # Clone with submodules
-git clone --recursive https://github.com/neul-labs/llamafu.git
+git clone --recursive https://github.com/skelf-research/llamafu.git
 cd llamafu
 
 # Setup development environment

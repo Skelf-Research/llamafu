@@ -32,7 +32,7 @@ Linux:
 
 ```bash
 # Clone repository with submodules
-git clone --recursive https://github.com/neul-labs/llamafu.git
+git clone --recursive https://github.com/skelf-research/llamafu.git
 cd llamafu
 
 # Setup development environment
@@ -262,7 +262,7 @@ cmake -B build \
 
 ```bash
 # Clone with submodules
-git clone --recursive https://github.com/neul-labs/llamafu.git
+git clone --recursive https://github.com/skelf-research/llamafu.git
 
 # Or initialize after clone
 git submodule update --init --recursive
